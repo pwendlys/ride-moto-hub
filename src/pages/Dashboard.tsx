@@ -69,6 +69,46 @@ interface AdminStats {
   pendingDrivers: number;
   totalRides: number;
   totalRevenue: number;
+  totalPassengers: number;
+}
+
+interface PassengerData {
+  id: string;
+  full_name: string;
+  phone: string;
+  created_at: string;
+  total_rides: number;
+  total_spent: number;
+}
+
+interface AllDriverData extends DriverData {
+  profile: {
+    full_name: string;
+    phone: string;
+    created_at: string;
+  };
+}
+
+interface DriverEarnings {
+  driver_id: string;
+  full_name: string;
+  total_rides: number;
+  total_earnings: number;
+  average_rating: number;
+  status: string;
+}
+
+interface RideData {
+  id: string;
+  passenger_name: string;
+  driver_name: string;
+  origin_address: string;
+  destination_address: string;
+  final_price: number;
+  status: string;
+  created_at: string;
+  passenger_rating: number;
+  driver_rating: number;
 }
 
 const Dashboard = () => {
@@ -81,11 +121,16 @@ const Dashboard = () => {
   
   // Admin states
   const [pendingDrivers, setPendingDrivers] = useState<DriverWithProfile[]>([]);
+  const [allDrivers, setAllDrivers] = useState<AllDriverData[]>([]);
+  const [passengers, setPassengers] = useState<PassengerData[]>([]);
+  const [driverEarnings, setDriverEarnings] = useState<DriverEarnings[]>([]);
+  const [rides, setRides] = useState<RideData[]>([]);
   const [adminStats, setAdminStats] = useState<AdminStats>({
     totalDrivers: 0,
     pendingDrivers: 0,
     totalRides: 0,
-    totalRevenue: 0
+    totalRevenue: 0,
+    totalPassengers: 0
   });
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
 
@@ -171,10 +216,23 @@ const Dashboard = () => {
       
       setPendingDrivers(driversWithProfiles);
 
+      // Load all drivers
+      await loadAllDrivers();
+      
+      // Load all passengers
+      await loadAllPassengers();
+      
+      // Load driver earnings
+      await loadDriverEarnings();
+      
+      // Load all rides
+      await loadAllRides();
+
       // Load admin stats
-      const [totalDriversRes, totalRidesRes, settingsRes] = await Promise.all([
+      const [totalDriversRes, totalRidesRes, totalPassengersRes, settingsRes] = await Promise.all([
         supabase.from('drivers').select('id', { count: 'exact' }),
         supabase.from('rides').select('id, final_price', { count: 'exact' }),
+        supabase.from('profiles').select('id', { count: 'exact' }).eq('user_type', 'passenger'),
         supabase.from('system_settings').select('*').single()
       ]);
 
@@ -182,7 +240,8 @@ const Dashboard = () => {
         totalDrivers: totalDriversRes.count || 0,
         pendingDrivers: driversData.length,
         totalRides: totalRidesRes.count || 0,
-        totalRevenue: totalRidesRes.data?.reduce((sum, ride) => sum + (ride.final_price || 0), 0) || 0
+        totalRevenue: totalRidesRes.data?.reduce((sum, ride) => sum + (ride.final_price || 0), 0) || 0,
+        totalPassengers: totalPassengersRes.count || 0
       };
 
       setAdminStats(stats);
@@ -190,6 +249,172 @@ const Dashboard = () => {
 
     } catch (error: any) {
       console.error('Error loading admin data:', error);
+    }
+  };
+
+  const loadAllDrivers = async () => {
+    try {
+      const { data: driversData, error } = await supabase
+        .from('drivers')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const driversWithProfiles = await Promise.all(
+        driversData.map(async (driver) => {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name, phone, created_at')
+            .eq('user_id', driver.user_id)
+            .single();
+
+          return {
+            ...driver,
+            profile: profileData || { full_name: 'Nome não informado', phone: 'Telefone não informado', created_at: '' }
+          };
+        })
+      );
+      
+      setAllDrivers(driversWithProfiles);
+    } catch (error: any) {
+      console.error('Error loading all drivers:', error);
+    }
+  };
+
+  const loadAllPassengers = async () => {
+    try {
+      const { data: passengersData, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_type', 'passenger')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Calculate ride stats for each passenger
+      const passengersWithStats = await Promise.all(
+        passengersData.map(async (passenger) => {
+          const { data: ridesData } = await supabase
+            .from('rides')
+            .select('final_price')
+            .eq('passenger_id', passenger.user_id)
+            .eq('status', 'completed');
+
+          const totalRides = ridesData?.length || 0;
+          const totalSpent = ridesData?.reduce((sum, ride) => sum + (ride.final_price || 0), 0) || 0;
+
+          return {
+            id: passenger.id,
+            full_name: passenger.full_name,
+            phone: passenger.phone,
+            created_at: passenger.created_at,
+            total_rides: totalRides,
+            total_spent: totalSpent
+          };
+        })
+      );
+      
+      setPassengers(passengersWithStats);
+    } catch (error: any) {
+      console.error('Error loading passengers:', error);
+    }
+  };
+
+  const loadDriverEarnings = async () => {
+    try {
+      const { data: driversData, error } = await supabase
+        .from('drivers')
+        .select('*');
+
+      if (error) throw error;
+
+      // Calculate earnings for each driver
+      const earningsData = await Promise.all(
+        driversData.map(async (driver) => {
+          // Get driver profile
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('user_id', driver.user_id)
+            .single();
+
+          // Get driver rides
+          const { data: ridesData } = await supabase
+            .from('rides')
+            .select('final_price')
+            .eq('driver_id', driver.user_id)
+            .eq('status', 'completed');
+
+          const totalEarnings = ridesData?.reduce((sum, ride) => sum + (ride.final_price || 0), 0) || 0;
+          // Calculate driver earnings (assuming 80% goes to driver based on app_fee_percentage)
+          const driverEarnings = totalEarnings * 0.8;
+
+          return {
+            driver_id: driver.id,
+            full_name: profileData?.full_name || 'Nome não informado',
+            total_rides: driver.total_rides || 0,
+            total_earnings: driverEarnings,
+            average_rating: driver.rating || 5.0,
+            status: driver.status
+          };
+        })
+      );
+      
+      setDriverEarnings(earningsData);
+    } catch (error: any) {
+      console.error('Error loading driver earnings:', error);
+    }
+  };
+
+  const loadAllRides = async () => {
+    try {
+      const { data: ridesData, error } = await supabase
+        .from('rides')
+        .select(`
+          id,
+          passenger_id,
+          driver_id,
+          origin_address,
+          destination_address,
+          final_price,
+          status,
+          created_at,
+          passenger_rating,
+          driver_rating
+        `)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+
+      // Get passenger and driver names
+      const ridesWithNames = await Promise.all(
+        ridesData.map(async (ride) => {
+          const [passengerRes, driverRes] = await Promise.all([
+            supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('user_id', ride.passenger_id)
+              .single(),
+            ride.driver_id ? supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('user_id', ride.driver_id)
+              .single() : Promise.resolve({ data: null })
+          ]);
+
+          return {
+            ...ride,
+            passenger_name: passengerRes.data?.full_name || 'Nome não informado',
+            driver_name: driverRes.data?.full_name || 'Motorista não atribuído'
+          };
+        })
+      );
+      
+      setRides(ridesWithNames);
+    } catch (error: any) {
+      console.error('Error loading rides:', error);
     }
   };
 
@@ -362,25 +587,40 @@ const Dashboard = () => {
                 </CardContent>
               </Card>
 
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Receita Total</p>
-                      <p className="text-2xl font-bold">R$ {adminStats.totalRevenue.toFixed(2)}</p>
-                    </div>
-                    <DollarSign className="w-8 h-8 text-success" />
-                  </div>
-                </CardContent>
-              </Card>
+               <Card>
+                 <CardContent className="p-6">
+                   <div className="flex items-center justify-between">
+                     <div>
+                       <p className="text-sm font-medium text-muted-foreground">Total de Passageiros</p>
+                       <p className="text-2xl font-bold">{adminStats.totalPassengers}</p>
+                     </div>
+                     <User className="w-8 h-8 text-primary" />
+                   </div>
+                 </CardContent>
+               </Card>
+
+               <Card>
+                 <CardContent className="p-6">
+                   <div className="flex items-center justify-between">
+                     <div>
+                       <p className="text-sm font-medium text-muted-foreground">Receita Total</p>
+                       <p className="text-2xl font-bold">R$ {adminStats.totalRevenue.toFixed(2)}</p>
+                     </div>
+                     <DollarSign className="w-8 h-8 text-success" />
+                   </div>
+                 </CardContent>
+               </Card>
             </div>
 
             {/* Admin Tabs */}
             <Tabs defaultValue="drivers" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-6">
                 <TabsTrigger value="drivers">Aprovar Motoristas</TabsTrigger>
+                <TabsTrigger value="passengers">Passageiros</TabsTrigger>
+                <TabsTrigger value="all-drivers">Todos os Motoristas</TabsTrigger>
+                <TabsTrigger value="earnings">Ganhos dos Motoristas</TabsTrigger>
+                <TabsTrigger value="rides">Corridas Realizadas</TabsTrigger>
                 <TabsTrigger value="settings">Configurações</TabsTrigger>
-                <TabsTrigger value="reports">Relatórios</TabsTrigger>
               </TabsList>
 
               {/* Pending Drivers Tab */}
@@ -447,6 +687,248 @@ const Dashboard = () => {
                         <CheckCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                         <p className="text-muted-foreground">
                           Não há motoristas pendentes de aprovação
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Passengers Tab */}
+              <TabsContent value="passengers" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <User className="w-5 h-5" />
+                      Todos os Passageiros
+                    </CardTitle>
+                    <CardDescription>
+                      Lista de todos os passageiros cadastrados na plataforma
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {passengers.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nome</TableHead>
+                            <TableHead>Telefone</TableHead>
+                            <TableHead>Data de Cadastro</TableHead>
+                            <TableHead>Total de Corridas</TableHead>
+                            <TableHead>Valor Gasto Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {passengers.map((passenger) => (
+                            <TableRow key={passenger.id}>
+                              <TableCell className="font-medium">{passenger.full_name}</TableCell>
+                              <TableCell>{passenger.phone}</TableCell>
+                              <TableCell>{new Date(passenger.created_at).toLocaleDateString('pt-BR')}</TableCell>
+                              <TableCell>{passenger.total_rides}</TableCell>
+                              <TableCell>R$ {passenger.total_spent.toFixed(2)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="text-center py-12">
+                        <User className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                        <p className="text-muted-foreground">
+                          Nenhum passageiro cadastrado
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* All Drivers Tab */}
+              <TabsContent value="all-drivers" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="w-5 h-5" />
+                      Todos os Motoristas
+                    </CardTitle>
+                    <CardDescription>
+                      Lista completa de todos os motoristas da plataforma
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {allDrivers.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Nome</TableHead>
+                            <TableHead>Telefone</TableHead>
+                            <TableHead>CNH</TableHead>
+                            <TableHead>Veículo</TableHead>
+                            <TableHead>Placa</TableHead>
+                            <TableHead>Cor</TableHead>
+                            <TableHead>Tipo</TableHead>
+                            <TableHead>Total de Corridas</TableHead>
+                            <TableHead>Avaliação</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Data de Cadastro</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {allDrivers.map((driver) => (
+                            <TableRow key={driver.id}>
+                              <TableCell className="font-medium">{driver.profile.full_name}</TableCell>
+                              <TableCell>{driver.profile.phone}</TableCell>
+                              <TableCell>{driver.cnh}</TableCell>
+                              <TableCell>{driver.vehicle_brand} {driver.vehicle_model}</TableCell>
+                              <TableCell>{driver.vehicle_plate}</TableCell>
+                              <TableCell>{driver.vehicle_color}</TableCell>
+                              <TableCell className="capitalize">{driver.vehicle_type}</TableCell>
+                              <TableCell>{driver.total_rides}</TableCell>
+                              <TableCell className="flex items-center gap-1">
+                                <Star className="w-4 h-4 text-warning fill-current" />
+                                {driver.rating.toFixed(1)}
+                              </TableCell>
+                              <TableCell>{getStatusBadge(driver.status)}</TableCell>
+                              <TableCell>{new Date(driver.profile.created_at).toLocaleDateString('pt-BR')}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="text-center py-12">
+                        <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                        <p className="text-muted-foreground">
+                          Nenhum motorista cadastrado
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* Driver Earnings Tab */}
+              <TabsContent value="earnings" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <DollarSign className="w-5 h-5" />
+                      Ganhos dos Motoristas
+                    </CardTitle>
+                    <CardDescription>
+                      Relatório de ganhos e transferências dos motoristas
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {driverEarnings.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Motorista</TableHead>
+                            <TableHead>Total de Corridas</TableHead>
+                            <TableHead>Total de Ganhos</TableHead>
+                            <TableHead>Ganho Médio por Corrida</TableHead>
+                            <TableHead>Avaliação Média</TableHead>
+                            <TableHead>Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {driverEarnings.map((driver) => (
+                            <TableRow key={driver.driver_id}>
+                              <TableCell className="font-medium">{driver.full_name}</TableCell>
+                              <TableCell>{driver.total_rides}</TableCell>
+                              <TableCell>R$ {driver.total_earnings.toFixed(2)}</TableCell>
+                              <TableCell>
+                                R$ {driver.total_rides > 0 ? (driver.total_earnings / driver.total_rides).toFixed(2) : '0.00'}
+                              </TableCell>
+                              <TableCell className="flex items-center gap-1">
+                                <Star className="w-4 h-4 text-warning fill-current" />
+                                {driver.average_rating.toFixed(1)}
+                              </TableCell>
+                              <TableCell>{getStatusBadge(driver.status)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="text-center py-12">
+                        <DollarSign className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                        <p className="text-muted-foreground">
+                          Nenhum dado de ganhos disponível
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              {/* All Rides Tab */}
+              <TabsContent value="rides" className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5" />
+                      Corridas Realizadas
+                    </CardTitle>
+                    <CardDescription>
+                      Histórico completo de todas as corridas da plataforma
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {rides.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Passageiro</TableHead>
+                            <TableHead>Motorista</TableHead>
+                            <TableHead>Origem</TableHead>
+                            <TableHead>Destino</TableHead>
+                            <TableHead>Valor</TableHead>
+                            <TableHead>Status</TableHead>
+                            <TableHead>Avaliação Passageiro</TableHead>
+                            <TableHead>Avaliação Motorista</TableHead>
+                            <TableHead>Data</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {rides.map((ride) => (
+                            <TableRow key={ride.id}>
+                              <TableCell className="font-medium">{ride.passenger_name}</TableCell>
+                              <TableCell>{ride.driver_name}</TableCell>
+                              <TableCell className="max-w-32 truncate">{ride.origin_address}</TableCell>
+                              <TableCell className="max-w-32 truncate">{ride.destination_address}</TableCell>
+                              <TableCell>R$ {ride.final_price?.toFixed(2) || '0.00'}</TableCell>
+                              <TableCell>
+                                <Badge variant={ride.status === 'completed' ? 'default' : 'secondary'}>
+                                  {ride.status === 'completed' ? 'Concluída' : 
+                                   ride.status === 'cancelled' ? 'Cancelada' : 
+                                   ride.status === 'in_progress' ? 'Em andamento' : ride.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {ride.passenger_rating ? (
+                                  <div className="flex items-center gap-1">
+                                    <Star className="w-4 h-4 text-warning fill-current" />
+                                    {ride.passenger_rating}
+                                  </div>
+                                ) : '-'}
+                              </TableCell>
+                              <TableCell>
+                                {ride.driver_rating ? (
+                                  <div className="flex items-center gap-1">
+                                    <Star className="w-4 h-4 text-warning fill-current" />
+                                    {ride.driver_rating}
+                                  </div>
+                                ) : '-'}
+                              </TableCell>
+                              <TableCell>{new Date(ride.created_at).toLocaleDateString('pt-BR')}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="text-center py-12">
+                        <BarChart3 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                        <p className="text-muted-foreground">
+                          Nenhuma corrida registrada
                         </p>
                       </div>
                     )}
