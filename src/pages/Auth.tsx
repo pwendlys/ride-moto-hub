@@ -13,7 +13,7 @@ import { Bike, User, Mail, Phone, Lock, FileText, Car } from "lucide-react";
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
-  const [userType, setUserType] = useState<"passenger" | "driver">("passenger");
+  const [userType, setUserType] = useState<"passenger" | "driver" | "admin">("passenger");
   const { signIn, signUp, user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -195,7 +195,7 @@ const Auth = () => {
               <form onSubmit={handleAuth} className="space-y-4">
                 <div className="space-y-2">
                   <Label>Tipo de Usuário</Label>
-                  <Select value={userType} onValueChange={(value: "passenger" | "driver") => setUserType(value)}>
+                  <Select value={userType} onValueChange={(value: "passenger" | "driver" | "admin") => setUserType(value)}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -210,6 +210,12 @@ const Auth = () => {
                         <div className="flex items-center gap-2">
                           <Bike className="w-4 h-4" />
                           Mototaxista
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="admin">
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4" />
+                          Administrador
                         </div>
                       </SelectItem>
                     </SelectContent>
