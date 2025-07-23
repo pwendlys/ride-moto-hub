@@ -153,18 +153,18 @@ const Dashboard = () => {
         .from('profiles')
         .select('*')
         .eq('user_id', user?.id)
-        .single();
+        .maybeSingle();
 
       if (profileError) throw profileError;
       setProfile(profileData);
 
       // Load driver data if user is a driver
-      if (profileData.user_type === 'driver') {
+      if (profileData && profileData.user_type === 'driver') {
         const { data: driverDataResponse, error: driverError } = await supabase
           .from('drivers')
           .select('*')
           .eq('user_id', user?.id)
-          .single();
+          .maybeSingle();
 
         if (driverError && driverError.code !== 'PGRST116') {
           throw driverError;
@@ -174,7 +174,7 @@ const Dashboard = () => {
       }
 
       // Load admin data if user is admin
-      if (profileData.user_type === 'admin') {
+      if (profileData && profileData.user_type === 'admin') {
         await loadAdminData();
       }
     } catch (error: any) {
@@ -205,7 +205,7 @@ const Dashboard = () => {
             .from('profiles')
             .select('full_name, phone')
             .eq('user_id', driver.user_id)
-            .single();
+            .maybeSingle();
 
           return {
             ...driver,
@@ -233,7 +233,7 @@ const Dashboard = () => {
         supabase.from('drivers').select('id', { count: 'exact' }),
         supabase.from('rides').select('id, final_price', { count: 'exact' }),
         supabase.from('profiles').select('id', { count: 'exact' }).eq('user_type', 'passenger'),
-        supabase.from('system_settings').select('*').single()
+        supabase.from('system_settings').select('*').maybeSingle()
       ]);
 
       const stats = {
@@ -267,7 +267,7 @@ const Dashboard = () => {
             .from('profiles')
             .select('full_name, phone, created_at')
             .eq('user_id', driver.user_id)
-            .single();
+            .maybeSingle();
 
           return {
             ...driver,
@@ -284,30 +284,46 @@ const Dashboard = () => {
 
   const loadAllPassengers = async () => {
     try {
+      console.log('Loading passengers...');
       const { data: passengersData, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, user_id, full_name, phone, created_at')
         .eq('user_type', 'passenger')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching passengers:', error);
+        throw error;
+      }
+
+      console.log('Passengers found:', passengersData);
+
+      if (!passengersData || passengersData.length === 0) {
+        console.log('No passengers found');
+        setPassengers([]);
+        return;
+      }
 
       // Calculate ride stats for each passenger
       const passengersWithStats = await Promise.all(
         passengersData.map(async (passenger) => {
-          const { data: ridesData } = await supabase
+          const { data: ridesData, error: ridesError } = await supabase
             .from('rides')
             .select('final_price')
             .eq('passenger_id', passenger.user_id)
             .eq('status', 'completed');
+
+          if (ridesError) {
+            console.error('Error fetching rides for passenger:', passenger.user_id, ridesError);
+          }
 
           const totalRides = ridesData?.length || 0;
           const totalSpent = ridesData?.reduce((sum, ride) => sum + (ride.final_price || 0), 0) || 0;
 
           return {
             id: passenger.id,
-            full_name: passenger.full_name,
-            phone: passenger.phone,
+            full_name: passenger.full_name || 'Nome não informado',
+            phone: passenger.phone || 'Telefone não informado',
             created_at: passenger.created_at,
             total_rides: totalRides,
             total_spent: totalSpent
@@ -315,6 +331,7 @@ const Dashboard = () => {
         })
       );
       
+      console.log('Passengers with stats:', passengersWithStats);
       setPassengers(passengersWithStats);
     } catch (error: any) {
       console.error('Error loading passengers:', error);
@@ -337,7 +354,7 @@ const Dashboard = () => {
             .from('profiles')
             .select('full_name')
             .eq('user_id', driver.user_id)
-            .single();
+            .maybeSingle();
 
           // Get driver rides
           const { data: ridesData } = await supabase
@@ -396,12 +413,12 @@ const Dashboard = () => {
               .from('profiles')
               .select('full_name')
               .eq('user_id', ride.passenger_id)
-              .single(),
+              .maybeSingle(),
             ride.driver_id ? supabase
               .from('profiles')
               .select('full_name')
               .eq('user_id', ride.driver_id)
-              .single() : Promise.resolve({ data: null })
+              .maybeSingle() : Promise.resolve({ data: null })
           ]);
 
           return {
