@@ -49,16 +49,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signUp = async (email: string, password: string, userData: any) => {
     const redirectUrl = `${window.location.origin}/`;
     
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: userData
-      }
-    });
-    
-    return { error };
+    try {
+      const { error, data } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            user_type: userData.user_type,
+            full_name: userData.full_name,
+            phone: userData.phone,
+            ...(userData.user_type === 'driver' && {
+              cnh: userData.cnh,
+              vehicle_brand: userData.vehicle_brand,
+              vehicle_model: userData.vehicle_model,
+              vehicle_plate: userData.vehicle_plate,
+              vehicle_color: userData.vehicle_color,
+              vehicle_type: userData.vehicle_type,
+            })
+          }
+        }
+      });
+      
+      return { error, data };
+    } catch (err: any) {
+      return { error: err };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
