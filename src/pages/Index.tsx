@@ -286,14 +286,6 @@ const Index = () => {
                 >
                   Começar Agora
                 </Button>
-                
-                <Button 
-                  variant="outline" 
-                  size="lg"
-                  className="text-lg px-8 py-6 border-primary-foreground/20 text-primary-foreground hover:bg-primary-foreground/10"
-                >
-                  Saiba Mais
-                </Button>
               </div>
             </CardContent>
           </Card>
