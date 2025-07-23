@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Bike, User, Mail, Phone, Lock, FileText, Car } from "lucide-react";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -35,21 +36,21 @@ const Auth = () => {
 
   useEffect(() => {
     if (user) {
-      navigate("/dashboard");
+      navigate('/dashboard');
     }
-  }, [user, navigate]);
 
-  useEffect(() => {
-    const type = searchParams.get("type");
-    const mode = searchParams.get("mode");
+    // Detectar parâmetros da URL para pré-selecionar tipo de usuário e modo
+    const typeParam = searchParams.get('type');
+    const modeParam = searchParams.get('mode');
     
-    if (type === "driver" || type === "passenger") {
-      setUserType(type);
+    if (typeParam && ['passenger', 'driver', 'admin'].includes(typeParam)) {
+      setUserType(typeParam as "passenger" | "driver" | "admin");
     }
-    if (mode === "signup") {
+    
+    if (modeParam === 'signup') {
       setIsSignUp(true);
     }
-  }, [searchParams]);
+  }, [user, navigate, searchParams]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,6 +113,10 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">
+      {/* Header */}
+      <div className="fixed top-0 right-0 z-50 p-4">
+        <ThemeToggle />
+      </div>
       <Card className="w-full max-w-2xl">
         <CardHeader className="text-center">
           <div className="flex items-center justify-center gap-2 mb-4">

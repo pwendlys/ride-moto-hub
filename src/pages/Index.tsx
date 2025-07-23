@@ -1,13 +1,16 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { Bike, Users, Shield, MapPin, Star, Clock } from "lucide-react";
 import heroImage from "@/assets/hero-mototaxi.jpg";
 
 const Index = () => {
   const [userType, setUserType] = useState<"passenger" | "driver" | null>(null);
+  const navigate = useNavigate();
 
   const features = [
     {
@@ -41,6 +44,11 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="fixed top-0 right-0 z-50 p-4">
+        <ThemeToggle />
+      </header>
+
       {/* Hero Section */}
       <section className="relative overflow-hidden">
         <div 
@@ -72,7 +80,7 @@ const Index = () => {
               <Button 
                 variant="hero" 
                 size="lg"
-                onClick={() => setUserType("passenger")}
+                onClick={() => navigate("/auth?type=passenger&mode=signup")}
                 className="text-lg px-8 py-6"
               >
                 <Users className="w-5 h-5 mr-2" />
@@ -82,7 +90,7 @@ const Index = () => {
               <Button 
                 variant="gradient" 
                 size="lg"
-                onClick={() => setUserType("driver")}
+                onClick={() => navigate("/auth?type=driver&mode=signup")}
                 className="text-lg px-8 py-6"
               >
                 <Bike className="w-5 h-5 mr-2" />
@@ -273,6 +281,7 @@ const Index = () => {
                 <Button 
                   variant="secondary" 
                   size="lg"
+                  onClick={() => navigate("/auth")}
                   className="text-lg px-8 py-6"
                 >
                   Começar Agora

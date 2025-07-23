@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -290,6 +291,7 @@ const Dashboard = () => {
             </div>
 
             <div className="flex items-center gap-3">
+              <ThemeToggle />
               <Button variant="ghost" size="sm">
                 <Settings className="w-4 h-4 mr-2" />
                 Configurações
