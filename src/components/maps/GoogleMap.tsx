@@ -111,26 +111,41 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
       if (!isMounted) return
       
       try {
+        console.log('🗺️ Iniciando carregamento do Google Maps...')
         setIsLoading(true)
         setError(null)
 
         // Check if Google Maps is already loaded
         if (window.google?.maps) {
+          console.log('✅ Google Maps já carregado, inicializando...')
           initializeMap()
           return
         }
 
+        console.log('📡 Buscando API key via edge function...')
+        
         // Buscar a API key do Google Maps via edge function
         const { data: keyData, error: keyError } = await supabase.functions.invoke('get-maps-key')
         
+        console.log('📨 Resposta da edge function:', { keyData, keyError })
+        
         if (!isMounted) return
         
-        if (keyError || !keyData?.apiKey) {
-          console.error('Erro ao obter API key:', keyError)
-          setError('Erro ao carregar a chave da API do Google Maps')
+        if (keyError) {
+          console.error('❌ Erro na edge function:', keyError)
+          setError(`Erro ao obter chave da API: ${keyError.message || 'Erro desconhecido'}`)
           setIsLoading(false)
           return
         }
+
+        if (!keyData?.apiKey) {
+          console.error('❌ API key não encontrada na resposta:', keyData)
+          setError('Chave da API do Google Maps não encontrada')
+          setIsLoading(false)
+          return
+        }
+
+        console.log('🔑 API key obtida com sucesso, carregando Google Maps...')
 
         const loader = new Loader({
           apiKey: keyData.apiKey,
@@ -142,12 +157,13 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
         
         if (!isMounted) return
         
+        console.log('✅ Google Maps carregado com sucesso!')
         initializeMap()
       } catch (error) {
         if (!isMounted) return
         
-        console.error('Erro ao carregar Google Maps:', error)
-        setError('Erro ao carregar o Google Maps')
+        console.error('💥 Erro crítico ao carregar Google Maps:', error)
+        setError(`Erro ao carregar o Google Maps: ${error instanceof Error ? error.message : 'Erro desconhecido'}`)
         setIsLoading(false)
       }
     }
@@ -221,12 +237,23 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
         style={{ height, width }}
         className={`rounded-lg border border-border flex items-center justify-center bg-muted ${className}`}
       >
-        <div className="text-center p-4">
-          <p className="text-destructive font-medium">Erro ao carregar o mapa</p>
-          <p className="text-sm text-muted-foreground mt-1">{error}</p>
-          <p className="text-xs text-muted-foreground mt-2">
-            Verifique se a chave da API do Google Maps está configurada corretamente
+        <div className="text-center p-4 max-w-md">
+          <p className="text-destructive font-medium mb-2">❌ Erro ao carregar o mapa</p>
+          <p className="text-sm text-muted-foreground mb-3 bg-background p-2 rounded text-left">
+            {error}
           </p>
+          <p className="text-xs text-muted-foreground">
+            💡 <strong>Possíveis soluções:</strong>
+            <br />• Verifique se a API key do Google Maps está configurada
+            <br />• Abra o DevTools (F12) para ver logs detalhados
+            <br />• Verifique se as APIs estão habilitadas no Google Cloud
+          </p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-3 px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90"
+          >
+            🔄 Recarregar Página
+          </button>
         </div>
       </div>
     )
