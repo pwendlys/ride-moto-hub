@@ -154,28 +154,6 @@ export default function RideTracking() {
     }
   }
 
-  const handleCancelRide = async () => {
-    if (!ride || ride.status !== 'requested') return
-    
-    try {
-      const { error } = await supabase
-        .from('rides')
-        .update({ 
-          status: 'cancelled', 
-          cancelled_at: new Date().toISOString() 
-        })
-        .eq('id', ride.id)
-
-      if (error) throw error
-      
-      toast.success('Corrida cancelada com sucesso')
-      navigate('/dashboard')
-    } catch (error) {
-      console.error('Erro ao cancelar corrida:', error)
-      toast.error('Erro ao cancelar corrida')
-    }
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -263,16 +241,6 @@ export default function RideTracking() {
             <CardContent className="space-y-4">
               <div className="text-center p-4 bg-accent rounded-lg">
                 <p className="font-medium">{getStatusMessage(ride.status)}</p>
-                {ride.status === 'requested' && (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={handleCancelRide}
-                    className="mt-3"
-                  >
-                    Cancelar Corrida
-                  </Button>
-                )}
               </div>
 
               <div className="space-y-3">

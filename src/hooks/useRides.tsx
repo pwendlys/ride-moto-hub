@@ -216,21 +216,6 @@ export const useRides = () => {
 
       if (error) throw error
 
-      // Trigger ride queue manager
-      try {
-        const { error: queueError } = await supabase.functions.invoke('ride-queue-manager', {
-          body: { rideId: data.id }
-        })
-        
-        if (queueError) {
-          console.error('Error triggering ride queue:', queueError)
-        } else {
-          console.log('✅ Ride queue triggered successfully')
-        }
-      } catch (queueError) {
-        console.error('Error calling ride queue manager:', queueError)
-      }
-
       toast({
         title: "Corrida solicitada!",
         description: "Sua corrida foi solicitada. Aguarde um motorista aceitar."

@@ -1,9 +1,7 @@
-
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { Loader } from '@googlemaps/js-api-loader'
 import { LocationCoords } from '@/hooks/useGeolocation'
 import { supabase } from '@/integrations/supabase/client'
-import { useAuth } from '@/hooks/useAuth'
 
 interface GoogleMapProps {
   center?: LocationCoords
@@ -37,7 +35,6 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
   showRoute,
   className = '',
 }) => {
-  const { user } = useAuth()
   const mapRef = useRef<HTMLDivElement>(null)
   const [map, setMap] = useState<google.maps.Map | null>(null)
   const [directionsService, setDirectionsService] = useState<google.maps.DirectionsService | null>(null)
@@ -109,10 +106,8 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
 
   useEffect(() => {
     let isMounted = true
-    let retryCount = 0
-    const maxRetries = 3
 
-    const loadGoogleMaps = async () => {
+    const initMap = async () => {
       if (!isMounted) return
       
       try {
@@ -127,29 +122,27 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
           return
         }
 
-        // Check if user is authenticated
-        if (!user) {
-          console.log('❌ Usuário não autenticado, aguardando...')
-          setError('Usuário não autenticado')
-          setIsLoading(false)
-          return
-        }
-
         console.log('📡 Buscando API key via edge function...')
         
-        // Get API key from edge function
+        // Buscar a API key do Google Maps via edge function
         const { data: keyData, error: keyError } = await supabase.functions.invoke('get-maps-key')
+        
+        console.log('📨 Resposta da edge function:', { keyData, keyError })
         
         if (!isMounted) return
         
         if (keyError) {
           console.error('❌ Erro na edge function:', keyError)
-          throw new Error(`Erro ao obter chave da API: ${keyError.message}`)
+          setError(`Erro ao obter chave da API: ${keyError.message || 'Erro desconhecido'}`)
+          setIsLoading(false)
+          return
         }
 
         if (!keyData?.apiKey) {
           console.error('❌ API key não encontrada na resposta:', keyData)
-          throw new Error('Chave da API do Google Maps não encontrada')
+          setError('Chave da API do Google Maps não encontrada')
+          setIsLoading(false)
+          return
         }
 
         console.log('🔑 API key obtida com sucesso, carregando Google Maps...')
@@ -169,25 +162,18 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
       } catch (error) {
         if (!isMounted) return
         
-        console.error('💥 Erro ao carregar Google Maps:', error)
-        
-        if (retryCount < maxRetries) {
-          retryCount++
-          console.log(`🔄 Tentativa ${retryCount}/${maxRetries} em 2 segundos...`)
-          setTimeout(() => loadGoogleMaps(), 2000)
-        } else {
-          setError(`Erro ao carregar o Google Maps: ${error instanceof Error ? error.message : 'Erro desconhecido'}`)
-          setIsLoading(false)
-        }
+        console.error('💥 Erro crítico ao carregar Google Maps:', error)
+        setError(`Erro ao carregar o Google Maps: ${error instanceof Error ? error.message : 'Erro desconhecido'}`)
+        setIsLoading(false)
       }
     }
 
-    loadGoogleMaps()
+    initMap()
 
     return () => {
       isMounted = false
     }
-  }, [initializeMap, user])
+  }, [initializeMap])
 
   // Update markers
   useEffect(() => {
@@ -256,17 +242,12 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
           <p className="text-sm text-muted-foreground mb-3 bg-background p-2 rounded text-left">
             {error}
           </p>
-          <div className="space-y-2 text-xs text-muted-foreground">
-            <p>
-              💡 <strong>Possíveis soluções:</strong>
-            </p>
-            <ul className="text-left space-y-1">
-              <li>• Verifique se você está logado no sistema</li>
-              <li>• Certifique-se de que a API key está configurada</li>
-              <li>• Abra o DevTools (F12) para ver logs detalhados</li>
-              <li>• Verifique se as APIs estão habilitadas no Google Cloud</li>
-            </ul>
-          </div>
+          <p className="text-xs text-muted-foreground">
+            💡 <strong>Possíveis soluções:</strong>
+            <br />• Verifique se a API key do Google Maps está configurada
+            <br />• Abra o DevTools (F12) para ver logs detalhados
+            <br />• Verifique se as APIs estão habilitadas no Google Cloud
+          </p>
           <button 
             onClick={() => window.location.reload()} 
             className="mt-3 px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90"
