@@ -44,6 +44,12 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
   useEffect(() => {
     const initMap = async () => {
       try {
+        // Check if Google Maps is already loaded
+        if (window.google && window.google.maps) {
+          initializeMap();
+          return;
+        }
+
         // Buscar a API key do Google Maps via edge function
         const { data: keyData, error: keyError } = await supabase.functions.invoke('get-maps-key')
         
@@ -59,54 +65,57 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
         })
 
         await loader.load()
-        
-        if (mapRef.current) {
-          const mapInstance = new google.maps.Map(mapRef.current, {
-            center,
-            zoom,
-            styles: [
-              {
-                featureType: 'poi',
-                elementType: 'labels',
-                stylers: [{ visibility: 'off' }]
-              }
-            ],
-          })
-
-          const directionsServiceInstance = new google.maps.DirectionsService()
-          const directionsRendererInstance = new google.maps.DirectionsRenderer({
-            suppressMarkers: false,
-            polylineOptions: {
-              strokeColor: showRoute?.color || '#4285F4',
-              strokeWeight: 4,
-            },
-          })
-
-          directionsRendererInstance.setMap(mapInstance)
-          
-          setMap(mapInstance)
-          setDirectionsService(directionsServiceInstance)
-          setDirectionsRenderer(directionsRendererInstance)
-          
-          if (onMapLoad) {
-            onMapLoad(mapInstance)
-          }
-
-          // Add click listener for location selection
-          if (onLocationSelect) {
-            mapInstance.addListener('click', (event: google.maps.MapMouseEvent) => {
-              if (event.latLng) {
-                const coords = {
-                  lat: event.latLng.lat(),
-                  lng: event.latLng.lng(),
-                }
-                onLocationSelect(coords)
-              }
-            })
-          }
-        }
+        initializeMap();
       } catch (error) {
         console.error('Erro ao carregar Google Maps:', error)
+      }
+    }
+
+    const initializeMap = () => {
+      if (mapRef.current && window.google && window.google.maps) {
+        const mapInstance = new google.maps.Map(mapRef.current, {
+          center,
+          zoom,
+          styles: [
+            {
+              featureType: 'poi',
+              elementType: 'labels',
+              stylers: [{ visibility: 'off' }]
+            }
+          ],
+        })
+
+        const directionsServiceInstance = new google.maps.DirectionsService()
+        const directionsRendererInstance = new google.maps.DirectionsRenderer({
+          suppressMarkers: false,
+          polylineOptions: {
+            strokeColor: showRoute?.color || '#4285F4',
+            strokeWeight: 4,
+          },
+        })
+
+        directionsRendererInstance.setMap(mapInstance)
+        
+        setMap(mapInstance)
+        setDirectionsService(directionsServiceInstance)
+        setDirectionsRenderer(directionsRendererInstance)
+        
+        if (onMapLoad) {
+          onMapLoad(mapInstance)
+        }
+
+        // Add click listener for location selection
+        if (onLocationSelect) {
+          mapInstance.addListener('click', (event: google.maps.MapMouseEvent) => {
+            if (event.latLng) {
+              const coords = {
+                lat: event.latLng.lat(),
+                lng: event.latLng.lng(),
+              }
+              onLocationSelect(coords)
+            }
+          })
+        }
       }
     }
 
