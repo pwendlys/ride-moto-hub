@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { systemSettingsSchema, validateData } from '@/lib/validations';
-import { AlertTriangle, Save, Shield, Lock } from 'lucide-react';
+import { AlertTriangle, Save, Shield, Lock, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function AdminSettings() {
@@ -170,6 +170,15 @@ export default function AdminSettings() {
 
   return (
     <div className="container mx-auto p-6 max-w-4xl">
+      <Button
+        variant="ghost"
+        onClick={() => navigate('/dashboard')}
+        className="mb-4 -ml-2"
+      >
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Voltar ao Painel
+      </Button>
+      
       <div className="flex items-center gap-3 mb-6">
         <Shield className="h-8 w-8 text-primary" />
         <div>
