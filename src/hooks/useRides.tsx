@@ -53,14 +53,7 @@ export const useRides = () => {
     try {
       const { data, error } = await supabase
         .from('rides')
-        .select(`
-          *,
-          passenger:profiles!rides_passenger_id_fkey(
-            id,
-            full_name,
-            phone
-          )
-        `)
+        .select('*')
         .order('requested_at', { ascending: false })
 
       if (error) {
@@ -73,10 +66,21 @@ export const useRides = () => {
         return
       }
 
-      const ridesWithPassenger = data?.map(ride => ({
-        ...ride,
-        passenger: Array.isArray(ride.passenger) ? ride.passenger[0] : ride.passenger
-      })).filter(ride => ride.passenger && !ride.passenger.error) as RideWithPassenger[]
+      // Get passenger data separately
+      const ridesWithPassenger = await Promise.all(
+        (data || []).map(async (ride) => {
+          const { data: passengerData } = await supabase
+            .from('profiles')
+            .select('id, full_name, phone')
+            .eq('user_id', ride.passenger_id)
+            .single()
+
+          return {
+            ...ride,
+            passenger: passengerData || { id: '', full_name: 'Desconhecido', phone: '' }
+          } as RideWithPassenger
+        })
+      )
 
       setRides(ridesWithPassenger || [])
     } catch (error) {

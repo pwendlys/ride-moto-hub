@@ -1,5 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,68 +8,117 @@ const corsHeaders = {
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { action, ...params } = await req.json()
-    const googleMapsApiKey = Deno.env.get('GOOGLE_MAPS_API_KEY')
+    const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
     
-    if (!googleMapsApiKey) {
-      throw new Error('Google Maps API key not configured')
+    if (!apiKey) {
+      console.error('GOOGLE_MAPS_API_KEY not found in environment');
+      return new Response(
+        JSON.stringify({ error: 'Google Maps API key not configured' }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
 
-    let url: string
-    let response: Response
+    const { action, ...params } = await req.json();
+
+    let googleMapsUrl: string;
+    let queryParams: URLSearchParams;
 
     switch (action) {
-      case 'geocode':
-        // Convert address to coordinates
-        url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(params.address)}&key=${googleMapsApiKey}`
-        break
-        
-      case 'reverse-geocode':
-        // Convert coordinates to address
-        url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${params.lat},${params.lng}&key=${googleMapsApiKey}`
-        break
-        
-      case 'directions':
-        // Get directions between two points
-        url = `https://maps.googleapis.com/maps/api/directions/json?origin=${params.origin}&destination=${params.destination}&key=${googleMapsApiKey}`
-        break
-        
       case 'places-autocomplete':
-        // Places autocomplete for address search
-        url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(params.input)}&key=${googleMapsApiKey}`
-        break
-        
+        googleMapsUrl = 'https://maps.googleapis.com/maps/api/place/autocomplete/json';
+        queryParams = new URLSearchParams({
+          key: apiKey,
+          input: params.input || '',
+          components: 'country:br', // Restrict to Brazil
+          language: 'pt-BR',
+        });
+        break;
+
       case 'place-details':
-        // Get place details by place_id
-        url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${params.place_id}&fields=geometry,formatted_address&key=${googleMapsApiKey}`
-        break
-        
+        googleMapsUrl = 'https://maps.googleapis.com/maps/api/place/details/json';
+        queryParams = new URLSearchParams({
+          key: apiKey,
+          place_id: params.place_id || '',
+          fields: 'geometry,formatted_address,name',
+          language: 'pt-BR',
+        });
+        break;
+
+      case 'directions':
+        googleMapsUrl = 'https://maps.googleapis.com/maps/api/directions/json';
+        queryParams = new URLSearchParams({
+          key: apiKey,
+          origin: params.origin || '',
+          destination: params.destination || '',
+          mode: 'driving',
+          language: 'pt-BR',
+          region: 'br',
+        });
+        break;
+
+      case 'reverse-geocode':
+        googleMapsUrl = 'https://maps.googleapis.com/maps/api/geocode/json';
+        queryParams = new URLSearchParams({
+          key: apiKey,
+          latlng: `${params.lat},${params.lng}`,
+          language: 'pt-BR',
+          region: 'br',
+        });
+        break;
+
       default:
-        throw new Error(`Unknown action: ${action}`)
+        return new Response(
+          JSON.stringify({ error: 'Invalid action' }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
     }
 
-    response = await fetch(url)
-    const data = await response.json()
+    const fullUrl = `${googleMapsUrl}?${queryParams.toString()}`;
+    console.log(`Making request to: ${action} - ${fullUrl}`);
+
+    const response = await fetch(fullUrl);
+    const data = await response.json();
+
+    if (data.status === 'REQUEST_DENIED' || data.status === 'INVALID_REQUEST') {
+      console.error('Google Maps API error:', data);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Google Maps API error', 
+          details: data.error_message || data.status 
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
 
     return new Response(
       JSON.stringify(data),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
+      { 
+        status: 200, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
-    )
+    );
+
   } catch (error) {
-    console.error('Google Maps proxy error:', error)
+    console.error('Error in Google Maps proxy:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500,
+      JSON.stringify({ error: 'Internal server error', details: error.message }),
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
-    )
+    );
   }
 })

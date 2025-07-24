@@ -43,22 +43,20 @@ export default function RideRequest() {
     try {
       const { data, error } = await supabase
         .from('rides')
-        .insert([
-          {
-            passenger_id: user.id,
-            origin_lat: routeInfo.origin.coords.lat,
-            origin_lng: routeInfo.origin.coords.lng,
-            origin_address: routeInfo.origin.address,
-            destination_lat: routeInfo.destination.coords.lat,
-            destination_lng: routeInfo.destination.coords.lng,
-            destination_address: routeInfo.destination.address,
-            distance_km: routeInfo.distance,
-            estimated_duration_minutes: Math.round(routeInfo.duration),
-            estimated_price: routeInfo.price,
-            status: 'requested',
-            payment_method: 'cash',
-          },
-        ])
+        .insert({
+          passenger_id: user.id,
+          origin_lat: routeInfo.origin.coords.lat,
+          origin_lng: routeInfo.origin.coords.lng,
+          origin_address: routeInfo.origin.address,
+          destination_lat: routeInfo.destination.coords.lat,
+          destination_lng: routeInfo.destination.coords.lng,
+          destination_address: routeInfo.destination.address,
+          distance_km: routeInfo.distance,
+          estimated_duration_minutes: Math.round(routeInfo.duration),
+          estimated_price: routeInfo.price,
+          status: 'requested',
+          payment_method: 'cash',
+        })
         .select()
         .single()
 
