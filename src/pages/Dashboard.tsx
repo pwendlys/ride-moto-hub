@@ -499,8 +499,23 @@ const Dashboard = () => {
   };
 
   const handleSignOut = async () => {
-    await signOut();
-    navigate("/");
+    try {
+      console.log('🚪 Processando logout do dashboard...');
+      await signOut();
+      
+      // Aguardar um pouco para garantir que o logout foi processado
+      setTimeout(() => {
+        navigate("/auth");
+      }, 100);
+      
+    } catch (error: any) {
+      console.error('❌ Erro durante logout:', error);
+      toast({
+        title: "Erro ao sair",
+        description: "Tente novamente",
+        variant: "destructive",
+      });
+    }
   };
 
   const getStatusBadge = (status: string) => {
