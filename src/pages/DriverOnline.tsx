@@ -36,8 +36,10 @@ const DriverOnline = () => {
 
   // Start listening for rides when component mounts
   useEffect(() => {
+    console.log('🔔 DriverOnline: Iniciando listener de corridas...')
     rideQueue.startListening();
     return () => {
+      console.log('🔔 DriverOnline: Parando listener de corridas...')
       rideQueue.stopListening();
     };
   }, []);
@@ -242,6 +244,15 @@ const DriverOnline = () => {
                 <p className="text-sm text-muted-foreground mt-2">
                   Fique atento às notificações de novas solicitações!
                 </p>
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="mt-4 p-3 bg-muted rounded text-left text-xs">
+                    <div><strong>Debug Info:</strong></div>
+                    <div>Listener Status: {rideQueue.isListening ? '✅ Ativo' : '❌ Inativo'}</div>
+                    <div>User ID: {user?.id}</div>
+                    <div>Online: {driverLocation.isOnline ? '✅' : '❌'}</div>
+                    <div>Coordinates: {currentLocation.coords ? `${currentLocation.coords.lat.toFixed(6)}, ${currentLocation.coords.lng.toFixed(6)}` : 'N/A'}</div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}

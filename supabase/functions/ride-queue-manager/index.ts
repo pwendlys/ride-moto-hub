@@ -157,10 +157,10 @@ async function notifyNextDriver(supabaseClient: any, rideId: string) {
 
   console.log(`🔔 Notifying driver ${nextNotification.driver_id} (position ${nextNotification.position_in_queue})`)
 
-  // Agendar próxima notificação após 45 segundos se esta expirar
+  // Agendar próxima notificação após 60 segundos se esta expirar
   setTimeout(async () => {
     await handleNotificationTimeout(supabaseClient, nextNotification.id, rideId)
-  }, 45000)
+  }, 60000)
 }
 
 async function handleNotificationTimeout(supabaseClient: any, notificationId: string, rideId: string) {
