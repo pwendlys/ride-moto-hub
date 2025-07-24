@@ -178,6 +178,53 @@ export type Database = {
         }
         Relationships: []
       }
+      ride_notifications: {
+        Row: {
+          created_at: string
+          distance_km: number | null
+          driver_id: string
+          expires_at: string
+          id: string
+          notified_at: string
+          position_in_queue: number
+          ride_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          distance_km?: number | null
+          driver_id: string
+          expires_at?: string
+          id?: string
+          notified_at?: string
+          position_in_queue: number
+          ride_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          distance_km?: number | null
+          driver_id?: string
+          expires_at?: string
+          id?: string
+          notified_at?: string
+          position_in_queue?: number
+          ride_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ride_notifications_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "rides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rides: {
         Row: {
           accepted_at: string | null

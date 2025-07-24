@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Car, Clock, MapPin, DollarSign } from 'lucide-react'
 import { MapSelector } from '@/components/maps/MapSelector'
-import { supabase } from '@/integrations/supabase/client'
+import { useRides } from '@/hooks/useRides'
 import { useAuth } from '@/hooks/useAuth'
+import { WaitingForDriver } from '@/components/WaitingForDriver'
+import { DriverFound } from '@/components/DriverFound'
 import { toast } from 'sonner'
 
 interface LocationSelection {
@@ -34,6 +36,7 @@ interface RouteInfo {
 export default function RideRequest() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { createRide } = useRides()
   const [routeInfo, setRouteInfo] = useState<RouteInfo | null>(null)
   const [isRequesting, setIsRequesting] = useState(false)
 
@@ -42,33 +45,22 @@ export default function RideRequest() {
   }
 
   const handleRequestRide = async () => {
-    if (!routeInfo || !user) {
+    if (!routeInfo) {
       toast.error('Informações incompletas para solicitar corrida')
       return
     }
 
     setIsRequesting(true)
     try {
-      const { data, error } = await supabase
-        .from('rides')
-        .insert({
-          passenger_id: user.id,
-          origin_lat: routeInfo.origin.coords.lat,
-          origin_lng: routeInfo.origin.coords.lng,
-          origin_address: routeInfo.origin.address,
-          destination_lat: routeInfo.destination.coords.lat,
-          destination_lng: routeInfo.destination.coords.lng,
-          destination_address: routeInfo.destination.address,
-          distance_km: routeInfo.distance,
-          estimated_duration_minutes: Math.round(routeInfo.duration),
-          estimated_price: routeInfo.price,
-          status: 'requested',
-          payment_method: 'cash',
-        })
-        .select()
-        .single()
-
-      if (error) throw error
+      const data = await createRide({
+        origin: routeInfo.origin.coords,
+        destination: routeInfo.destination.coords,
+        origin_address: routeInfo.origin.address,
+        destination_address: routeInfo.destination.address,
+        distance_km: routeInfo.distance,
+        estimated_duration_minutes: Math.round(routeInfo.duration),
+        estimated_price: routeInfo.price,
+      })
 
       toast.success('Corrida solicitada com sucesso!')
       navigate(`/ride/${data.id}`)

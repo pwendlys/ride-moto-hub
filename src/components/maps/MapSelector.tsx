@@ -8,6 +8,7 @@ import { GoogleMap } from './GoogleMap'
 import { LocationCoords, useGeolocation } from '@/hooks/useGeolocation'
 import { supabase } from '@/integrations/supabase/client'
 import { useSystemSettings } from '@/hooks/useSystemSettings'
+import { useAuth } from '@/hooks/useAuth'
 import { toast } from 'sonner'
 
 interface LocationSelection {
@@ -39,6 +40,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
   onRouteCalculated,
   onLocationSelect,
 }) => {
+  const { user } = useAuth()
   const { coords: currentLocation, loading: locationLoading } = useGeolocation()
   const { settings: systemSettings, loading: settingsLoading } = useSystemSettings()
   const [origin, setOrigin] = useState<LocationSelection | null>(null)
@@ -56,6 +58,8 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
 
   // Function to get address from coordinates using reverse geocoding
   const getAddressFromCoords = async (coords: LocationCoords): Promise<string> => {
+    if (!user) return 'Localização atual'
+    
     try {
       const { data, error } = await supabase.functions.invoke('google-maps-proxy', {
         body: {
@@ -65,9 +69,12 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
         },
       })
 
-      if (error) throw error
+      if (error) {
+        console.error('Erro no reverse geocoding:', error)
+        return 'Localização atual'
+      }
 
-      if (data.results && data.results.length > 0) {
+      if (data?.results && data.results.length > 0) {
         return data.results[0].formatted_address
       }
       
@@ -80,7 +87,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
 
   // Auto-set current location as origin with reverse geocoding
   useEffect(() => {
-    if (currentLocation && !origin && !locationLoading) {
+    if (currentLocation && !origin && !locationLoading && user) {
       const setCurrentLocationWithAddress = async () => {
         const address = await getAddressFromCoords(currentLocation)
         
@@ -98,11 +105,11 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
 
       setCurrentLocationWithAddress()
     }
-  }, [currentLocation, origin, onLocationSelect, locationLoading])
+  }, [currentLocation, origin, onLocationSelect, locationLoading, user])
 
   // Debounced search function
   const searchPlaces = useCallback(async (query: string, type: 'origin' | 'destination') => {
-    if (!query.trim()) {
+    if (!query.trim() || !user) {
       if (type === 'origin') setOriginResults([])
       else setDestinationResults([])
       return
@@ -119,12 +126,16 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
         },
       })
 
-      if (error) throw error
+      if (error) {
+        console.error('Erro na busca:', error)
+        toast.error('Erro ao buscar endereços')
+        return
+      }
 
       if (type === 'origin') {
-        setOriginResults(data.predictions || [])
+        setOriginResults(data?.predictions || [])
       } else {
-        setDestinationResults(data.predictions || [])
+        setDestinationResults(data?.predictions || [])
       }
     } catch (error) {
       console.error('Erro na busca:', error)
@@ -133,7 +144,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
       if (type === 'origin') setIsSearchingOrigin(false)
       else setIsSearchingDestination(false)
     }
-  }, [])
+  }, [user])
 
   // Debounce search
   useEffect(() => {
@@ -155,6 +166,8 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
   }, [destinationQuery, searchPlaces])
 
   const selectPlace = async (place: any, type: 'origin' | 'destination') => {
+    if (!user) return
+    
     try {
       const { data, error } = await supabase.functions.invoke('google-maps-proxy', {
         body: {
@@ -163,7 +176,11 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
         },
       })
 
-      if (error) throw error
+      if (error) {
+        console.error('Erro ao obter detalhes do local:', error)
+        toast.error('Erro ao selecionar local')
+        return
+      }
 
       const location: LocationSelection = {
         coords: {
@@ -194,7 +211,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
   }
 
   const calculateRoute = async () => {
-    if (!origin || !destination) return
+    if (!origin || !destination || !user) return
 
     setIsCalculatingRoute(true)
     try {
@@ -206,9 +223,13 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
         },
       })
 
-      if (error) throw error
+      if (error) {
+        console.error('Erro no cálculo de rota:', error)
+        toast.error('Erro ao calcular rota')
+        return
+      }
 
-      if (data.routes && data.routes.length > 0) {
+      if (data?.routes && data.routes.length > 0) {
         const route = data.routes[0]
         const leg = route.legs[0]
         
@@ -284,7 +305,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
   }
 
   const useCurrentLocation = async () => {
-    if (!currentLocation) return
+    if (!currentLocation || !user) return
 
     setIsGettingAddress(true)
     
@@ -313,10 +334,10 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
 
   // Calculate route when both locations are set
   useEffect(() => {
-    if (origin && destination) {
+    if (origin && destination && user) {
       calculateRoute()
     }
-  }, [origin, destination])
+  }, [origin, destination, user])
 
   const markers = []
   if (origin) {
@@ -335,6 +356,27 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
   }
 
   const isRouteValid = origin && destination
+
+  // Show authentication message if user is not logged in
+  if (!user) {
+    return (
+      <div className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5" />
+              Definir Trajeto
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-center py-8">
+            <p className="text-muted-foreground">
+              Você precisa estar logado para usar o sistema de mapas
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
