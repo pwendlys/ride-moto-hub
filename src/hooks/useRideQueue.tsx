@@ -27,11 +27,21 @@ export const useRideQueue = () => {
   const [isListening, setIsListening] = useState(false)
   const { toast } = useToast()
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     if (isListening) return
 
     setIsListening(true)
     console.log('🔔 Starting ride notification listener')
+
+    // Get current user ID first
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
+      console.error('❌ Erro ao obter usuário para listener:', userError)
+      setIsListening(false)
+      return
+    }
+
+    console.log(`🔔 Configurando listener para motorista: ${user.id}`)
 
     // Subscribe to ride notifications for current driver
     const channel = supabase
@@ -42,11 +52,19 @@ export const useRideQueue = () => {
           event: 'INSERT',
           schema: 'public',
           table: 'ride_notifications',
-          filter: `driver_id=eq.${supabase.auth.getUser().then(u => u.data.user?.id)}`
+          filter: `driver_id=eq.${user.id}`
         },
         async (payload) => {
           const notification = payload.new as RideNotification
           console.log('📨 New ride notification received:', notification)
+
+          // Verificar se a notificação é para este motorista
+          if (notification.driver_id !== user.id) {
+            console.log('⚠️ Notificação recebida para outro motorista, ignorando')
+            return
+          }
+
+          console.log('✅ Notificação confirmada para este motorista')
 
           // Fetch complete ride data
           const enrichedNotification = await enrichNotificationData(notification)
@@ -59,6 +77,8 @@ export const useRideQueue = () => {
               duration: 10000
             })
 
+            console.log('🔔 Notificação adicionada à lista:', enrichedNotification)
+
             // Play notification sound
             try {
               const audio = new Audio('/notification.mp3')
@@ -66,6 +86,8 @@ export const useRideQueue = () => {
             } catch {
               console.log('🔔 Nova corrida!')
             }
+          } else {
+            console.error('❌ Erro ao enriquecer dados da notificação')
           }
         }
       )
@@ -74,13 +96,16 @@ export const useRideQueue = () => {
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'ride_notifications'
+          table: 'ride_notifications',
+          filter: `driver_id=eq.${user.id}`
         },
         (payload) => {
           const updatedNotification = payload.new as RideNotification
+          console.log('📝 Notification updated:', updatedNotification)
           
           // Remove notification if expired or accepted by someone else
           if (updatedNotification.status !== 'pending') {
+            console.log(`🗑️ Removendo notificação com status: ${updatedNotification.status}`)
             setActiveNotifications(prev => 
               prev.filter(n => n.id !== updatedNotification.id)
             )
@@ -89,7 +114,10 @@ export const useRideQueue = () => {
       )
       .subscribe()
 
+    console.log('✅ Listener configurado e ativo')
+
     return () => {
+      console.log('🔕 Removendo listener')
       supabase.removeChannel(channel)
       setIsListening(false)
     }
@@ -175,12 +203,17 @@ export const useRideQueue = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date()
-      setActiveNotifications(prev => 
-        prev.filter(notification => {
+      setActiveNotifications(prev => {
+        const filtered = prev.filter(notification => {
           const expiresAt = new Date(notification.expires_at)
-          return expiresAt > now
+          const isExpired = expiresAt <= now
+          if (isExpired) {
+            console.log(`⏰ Removendo notificação expirada: ${notification.id}`)
+          }
+          return !isExpired
         })
-      )
+        return filtered
+      })
     }, 1000)
 
     return () => clearInterval(interval)
@@ -198,6 +231,8 @@ export const useRideQueue = () => {
 
 async function enrichNotificationData(notification: RideNotification): Promise<RideNotification | null> {
   try {
+    console.log(`🔍 Enriquecendo dados da notificação: ${notification.id}`)
+    
     // Fetch ride with passenger data
     const { data: ride, error: rideError } = await supabase
       .from('rides')
@@ -206,9 +241,15 @@ async function enrichNotificationData(notification: RideNotification): Promise<R
       .single()
 
     if (rideError || !ride) {
-      console.error('Error fetching ride data:', rideError)
+      console.error('❌ Erro ao buscar dados da corrida:', rideError)
       return null
     }
+
+    console.log('✅ Dados da corrida encontrados:', { 
+      id: ride.id, 
+      origin: ride.origin_address, 
+      destination: ride.destination_address 
+    })
 
     // Fetch passenger data
     const { data: passenger, error: passengerError } = await supabase
@@ -218,11 +259,13 @@ async function enrichNotificationData(notification: RideNotification): Promise<R
       .single()
 
     if (passengerError || !passenger) {
-      console.error('Error fetching passenger data:', passengerError)
+      console.error('❌ Erro ao buscar dados do passageiro:', passengerError)
       return null
     }
 
-    return {
+    console.log('✅ Dados do passageiro encontrados:', passenger.full_name)
+
+    const enrichedData = {
       ...notification,
       ride: {
         origin_address: ride.origin_address,
@@ -231,8 +274,12 @@ async function enrichNotificationData(notification: RideNotification): Promise<R
         passenger
       }
     }
+
+    console.log('✅ Notificação enriquecida com sucesso')
+    return enrichedData
+
   } catch (error) {
-    console.error('Error enriching notification data:', error)
+    console.error('❌ Erro ao enriquecer dados da notificação:', error)
     return null
   }
 }

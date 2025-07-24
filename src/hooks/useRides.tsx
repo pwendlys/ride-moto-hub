@@ -216,19 +216,22 @@ export const useRides = () => {
 
       if (error) throw error
 
+      console.log('🚗 Corrida criada com sucesso:', { id: data.id, status: data.status })
+      
       // Trigger ride queue manager
       try {
-        const { error: queueError } = await supabase.functions.invoke('ride-queue-manager', {
+        console.log('🔔 Iniciando processo de notificação de motoristas...')
+        const { data: queueResponse, error: queueError } = await supabase.functions.invoke('ride-queue-manager', {
           body: { rideId: data.id }
         })
         
         if (queueError) {
-          console.error('Error triggering ride queue:', queueError)
+          console.error('❌ Erro ao disparar fila de corridas:', queueError)
         } else {
-          console.log('✅ Ride queue triggered successfully')
+          console.log('✅ Fila de corridas disparada com sucesso:', queueResponse)
         }
       } catch (queueError) {
-        console.error('Error calling ride queue manager:', queueError)
+        console.error('❌ Erro ao chamar ride queue manager:', queueError)
       }
 
       toast({
