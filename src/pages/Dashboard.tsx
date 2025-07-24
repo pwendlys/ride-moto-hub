@@ -9,6 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useDriverLocation } from "@/hooks/useDriverLocation";
+import { useDriverRideNotifications } from "@/hooks/useRides";
+import { RideNotification } from "@/components/RideNotification";
 import { 
   Bike, 
   Car,
@@ -123,6 +126,10 @@ const Dashboard = () => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [driverData, setDriverData] = useState<DriverData | null>(null);
   const [loadingData, setLoadingData] = useState(true);
+  
+  // Driver functionality hooks
+  const driverLocation = useDriverLocation(false);
+  const rideNotifications = useDriverRideNotifications();
   
   // Admin states
   const [pendingDrivers, setPendingDrivers] = useState<DriverWithProfile[]>([]);
@@ -461,6 +468,31 @@ const Dashboard = () => {
         title: "Erro ao atualizar status",
         description: error.message,
         variant: "destructive",
+      });
+    }
+  };
+
+  // Handle driver going online/offline
+  const handleToggleOnline = async () => {
+    if (profile?.user_type !== 'driver' || !driverData || driverData.status !== 'approved') {
+      toast({
+        title: "Ação não permitida",
+        description: "Apenas motoristas aprovados podem ficar online",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!driverLocation.isOnline) {
+      // Going online - navigate to driver online page
+      navigate('/driver/online');
+    } else {
+      // Going offline
+      await driverLocation.setOnlineStatus(false);
+      rideNotifications.stopListening();
+      toast({
+        title: "Status atualizado",
+        description: "Você está offline agora"
       });
     }
   };
@@ -1132,11 +1164,24 @@ const Dashboard = () => {
                 </>
               ) : (
                 <>
-                  <Card className="hover:shadow-glow transition-all duration-300 cursor-pointer">
+                  <Card 
+                    className="hover:shadow-glow transition-all duration-300 cursor-pointer"
+                    onClick={handleToggleOnline}
+                  >
                     <CardContent className="p-6 text-center">
                       <Clock className="w-12 h-12 text-primary mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold mb-2">Ficar Online</h3>
-                      <p className="text-muted-foreground">Receber solicitações de corrida</p>
+                      <h3 className="text-lg font-semibold mb-2">
+                        {driverLocation.isOnline ? 'Ficar Offline' : 'Ficar Online'}
+                      </h3>
+                      <p className="text-muted-foreground">
+                        {driverLocation.isOnline ? 'Parar de receber corridas' : 'Receber solicitações de corrida'}
+                      </p>
+                      {driverLocation.isOnline && (
+                        <Badge className="mt-2 bg-success text-success-foreground">
+                          <Circle className="w-3 h-3 mr-1 fill-current" />
+                          Online
+                        </Badge>
+                      )}
                     </CardContent>
                   </Card>
 
@@ -1159,6 +1204,26 @@ const Dashboard = () => {
               )}
             </div>
 
+            {/* Driver Ride Notifications */}
+            {profile.user_type === 'driver' && rideNotifications.pendingRides.length > 0 && (
+              <div className="mb-6 space-y-4">
+                <h3 className="text-lg font-semibold">Corridas Disponíveis</h3>
+                {rideNotifications.pendingRides.map((ride) => (
+                  <RideNotification
+                    key={ride.id}
+                    ride={ride}
+                    onAccept={async (rideId) => {
+                      // Navigate to driver online page to handle ride acceptance
+                      navigate('/driver/online');
+                    }}
+                    onDecline={(rideId) => {
+                      rideNotifications.removePendingRide(rideId);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
             {/* Recent Activity */}
             <Card>
               <CardHeader>
@@ -1179,11 +1244,13 @@ const Dashboard = () => {
                   <Button variant="outline" className="mt-4" onClick={() => {
                     if (profile.user_type === 'passenger') {
                       navigate('/ride/request')
+                    } else {
+                      handleToggleOnline()
                     }
                   }}>
                     {profile.user_type === 'passenger' 
                       ? 'Solicitar Primeira Corrida'
-                      : 'Ficar Online'
+                      : driverLocation.isOnline ? 'Ficar Offline' : 'Ficar Online'
                     }
                   </Button>
                 </div>

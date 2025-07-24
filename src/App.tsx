@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import RideRequest from "./pages/RideRequest";
 import RideTracking from "./pages/RideTracking";
 import ActiveRide from "./pages/ActiveRide";
+import DriverOnline from "./pages/DriverOnline";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,6 +36,7 @@ const App = () => (
               <Route path="/ride/request" element={<RideRequest />} />
               <Route path="/ride/:id" element={<RideTracking />} />
               <Route path="/active-ride/:id" element={<ActiveRide />} />
+              <Route path="/driver/online" element={<DriverOnline />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
