@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      driver_locations: {
+        Row: {
+          accuracy: number | null
+          created_at: string
+          driver_id: string
+          heading: number | null
+          id: string
+          is_online: boolean
+          last_update: string
+          lat: number
+          lng: number
+          speed: number | null
+          updated_at: string
+        }
+        Insert: {
+          accuracy?: number | null
+          created_at?: string
+          driver_id: string
+          heading?: number | null
+          id?: string
+          is_online?: boolean
+          last_update?: string
+          lat: number
+          lng: number
+          speed?: number | null
+          updated_at?: string
+        }
+        Update: {
+          accuracy?: number | null
+          created_at?: string
+          driver_id?: string
+          heading?: number | null
+          id?: string
+          is_online?: boolean
+          last_update?: string
+          lat?: number
+          lng?: number
+          speed?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       drivers: {
         Row: {
           cnh: string

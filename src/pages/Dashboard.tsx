@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Bike, 
+  Car,
   User, 
   MapPin, 
   Clock, 
@@ -25,7 +26,11 @@ import {
   Shield,
   Users,
   DollarSign,
-  BarChart3
+  BarChart3,
+  TrendingUp,
+  Check,
+  X,
+  Circle
 } from "lucide-react";
 
 interface Profile {
@@ -1098,11 +1103,14 @@ const Dashboard = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
               {profile.user_type === 'passenger' ? (
                 <>
-                  <Card className="hover:shadow-glow transition-all duration-300 cursor-pointer">
+                  <Card 
+                    className="hover:shadow-glow transition-all duration-300 cursor-pointer"
+                    onClick={() => navigate('/ride/request')}
+                  >
                     <CardContent className="p-6 text-center">
-                      <Plus className="w-12 h-12 text-primary mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold mb-2">Nova Corrida</h3>
-                      <p className="text-muted-foreground">Solicitar uma nova corrida</p>
+                      <Car className="w-12 h-12 text-primary mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">Solicitar Corrida</h3>
+                      <p className="text-muted-foreground">Encontre um motorista e solicite sua corrida</p>
                     </CardContent>
                   </Card>
 
@@ -1168,9 +1176,13 @@ const Dashboard = () => {
                       : 'Você ainda não realizou nenhuma corrida'
                     }
                   </p>
-                  <Button variant="outline" className="mt-4">
+                  <Button variant="outline" className="mt-4" onClick={() => {
+                    if (profile.user_type === 'passenger') {
+                      navigate('/ride/request')
+                    }
+                  }}>
                     {profile.user_type === 'passenger' 
-                      ? 'Solicitar Primera Corrida'
+                      ? 'Solicitar Primeira Corrida'
                       : 'Ficar Online'
                     }
                   </Button>
