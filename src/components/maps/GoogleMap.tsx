@@ -137,17 +137,44 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
 
         console.log('📡 Buscando API key via edge function...')
         
-        // Get API key from edge function
-        const { data: keyData, error: keyError } = await supabase.functions.invoke('get-maps-key')
+        // Get API key from edge function with improved error handling
+        let { data: keyData, error: keyError } = await supabase.functions.invoke('get-maps-key')
         
         if (!isMounted) return
         
         if (keyError) {
           console.error('❌ Erro na edge function:', keyError)
-          throw new Error(`Erro ao obter chave da API: ${keyError.message}`)
-        }
-
-        if (!keyData?.apiKey) {
+          
+          // Check if it's an authentication error
+          if (keyError.message?.includes('401') || keyError.message?.includes('Unauthorized')) {
+            // Try to refresh the session
+            console.log('🔄 Tentando renovar sessão...')
+            const { error: refreshError } = await supabase.auth.refreshSession()
+            
+            if (refreshError) {
+              throw new Error('Sessão expirada. Por favor, faça login novamente.')
+            }
+            
+            if (!isMounted) return
+            
+            // Retry with refreshed session
+            console.log('🔄 Tentando novamente com sessão renovada...')
+            const retryResult = await supabase.functions.invoke('get-maps-key')
+            
+            if (retryResult.error) {
+              throw new Error('Erro de autenticação. Por favor, faça login novamente.')
+            }
+            
+            if (!retryResult.data?.apiKey) {
+              throw new Error('Chave da API do Google Maps não encontrada após renovação da sessão')
+            }
+            
+            // Use the retry data
+            keyData = retryResult.data
+          } else {
+            throw new Error(`Erro ao obter chave da API: ${keyError.message}`)
+          }
+        } else if (!keyData?.apiKey) {
           console.error('❌ API key não encontrada na resposta:', keyData)
           throw new Error('Chave da API do Google Maps não encontrada')
         }

@@ -22,13 +22,18 @@ serve(async (req) => {
     if (!authHeader) {
       console.error('❌ No authorization header provided')
       return new Response(
-        JSON.stringify({ error: 'Authentication required' }),
+        JSON.stringify({ 
+          error: 'Authentication required',
+          code: 'MISSING_AUTH_HEADER'
+        }),
         { 
           status: 401, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
     }
+
+    console.log('🔍 Authorization header present, verifying token...')
 
     // Create Supabase client with auth header
     const supabaseClient = createClient(
@@ -40,10 +45,34 @@ serve(async (req) => {
     // Verify JWT token
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
     
-    if (authError || !user) {
-      console.error('❌ Authentication failed:', authError?.message || 'No user found')
+    if (authError) {
+      console.error('❌ Authentication failed:', authError.message, 'Status:', authError.status)
+      
+      // Check if it's a token expiration error
+      const isTokenExpired = authError.message?.includes('expired') || 
+                            authError.message?.includes('invalid') ||
+                            authError.status === 401
+
       return new Response(
-        JSON.stringify({ error: 'Invalid authentication' }),
+        JSON.stringify({ 
+          error: isTokenExpired ? 'Token expired' : 'Invalid authentication',
+          code: isTokenExpired ? 'TOKEN_EXPIRED' : 'INVALID_TOKEN',
+          details: authError.message
+        }),
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    if (!user) {
+      console.error('❌ No user found after successful auth')
+      return new Response(
+        JSON.stringify({ 
+          error: 'User not found',
+          code: 'USER_NOT_FOUND'
+        }),
         { 
           status: 401, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
