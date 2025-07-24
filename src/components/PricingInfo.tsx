@@ -92,7 +92,7 @@ export const PricingInfo = () => {
         <div className="pt-3 border-t">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Taxa do App</span>
+            <span className="text-sm font-medium">Taxa Administrativa</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-sm">Taxa ({settings.fee_type === 'percentage' ? 'percentual' : 'fixa'}):</span>
@@ -103,14 +103,14 @@ export const PricingInfo = () => {
               }
             </span>
           </div>
-          <div className="flex items-center justify-between text-sm text-muted-foreground mt-1">
-            <span>Você recebe:</span>
-            <span>
-              {settings.fee_type === 'percentage' 
-                ? `${(100 - settings.app_fee_percentage).toFixed(0)}% do valor` 
-                : 'Valor - taxa fixa'
-              }
-            </span>
+          <div className="bg-primary/10 p-3 rounded-lg mt-2">
+            <p className="text-xs text-foreground font-medium mb-1">
+              💰 Recebimento de Pagamento
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Você recebe o valor total da corrida diretamente do passageiro. 
+              A taxa administrativa deve ser paga posteriormente ao administrador.
+            </p>
           </div>
         </div>
 
@@ -143,7 +143,18 @@ export const PricingInfo = () => {
               </div>
             )}
             <div className="flex justify-between text-primary border-t pt-1">
-              <span>Você recebe:</span>
+              <span>Valor recebido do passageiro:</span>
+              <span>
+                R$ {Math.max(
+                  settings.pricing_model === 'per_km' 
+                    ? settings.fixed_rate + (5 * settings.price_per_km)
+                    : settings.fixed_rate, 
+                  settings.minimum_fare
+                ).toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between text-muted-foreground">
+              <span>Taxa a pagar ao admin:</span>
               <span>
                 R$ {
                   settings.fee_type === 'percentage' 
@@ -152,13 +163,8 @@ export const PricingInfo = () => {
                           ? settings.fixed_rate + (5 * settings.price_per_km)
                           : settings.fixed_rate, 
                         settings.minimum_fare
-                      ) * (1 - settings.app_fee_percentage / 100)).toFixed(2)
-                    : (Math.max(
-                        settings.pricing_model === 'per_km' 
-                          ? settings.fixed_rate + (5 * settings.price_per_km)
-                          : settings.fixed_rate, 
-                        settings.minimum_fare
-                      ) - settings.app_fee_percentage).toFixed(2)
+                      ) * (settings.app_fee_percentage / 100)).toFixed(2)
+                    : settings.app_fee_percentage.toFixed(2)
                 }
               </span>
             </div>

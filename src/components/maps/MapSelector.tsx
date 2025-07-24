@@ -498,13 +498,9 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
                     </div>
                   )}
                   <div className="border-t pt-1 mt-2">
-                    <div className="flex justify-between">
-                      <span>Taxa do app ({(systemSettings?.app_fee_percentage || 20)}%):</span>
-                      <span>R$ {routeInfo.appFee.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between font-medium">
-                      <span>Motorista recebe:</span>
-                      <span>R$ {routeInfo.driverEarnings.toFixed(2)}</span>
+                    <div className="flex justify-between font-medium text-primary">
+                      <span>Valor total a pagar:</span>
+                      <span>R$ {routeInfo.price.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>

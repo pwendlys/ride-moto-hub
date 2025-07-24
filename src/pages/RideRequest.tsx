@@ -187,13 +187,9 @@ export default function RideRequest() {
                           </div>
                         )}
                         <div className="border-t pt-1 mt-2">
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Taxa do app:</span>
-                            <span>R$ {routeInfo.appFee.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Motorista recebe:</span>
-                            <span>R$ {routeInfo.driverEarnings.toFixed(2)}</span>
+                          <div className="flex justify-between font-medium text-primary">
+                            <span>Valor total a pagar:</span>
+                            <span>R$ {routeInfo.price.toFixed(2)}</span>
                           </div>
                         </div>
                       </div>
