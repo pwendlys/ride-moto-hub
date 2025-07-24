@@ -42,7 +42,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
 
   // Set current location as origin when available
   useEffect(() => {
-    if (currentLocation && !origin) {
+    if (currentLocation && !origin && !locationLoading) {
       const currentLocationData: LocationSelection = {
         coords: currentLocation,
         address: 'Localização atual',
@@ -52,7 +52,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
       setMapCenter(currentLocation)
       onLocationSelect?.('origin', currentLocationData)
     }
-  }, [currentLocation, origin, onLocationSelect])
+  }, [currentLocation, origin, onLocationSelect, locationLoading])
 
   const searchPlaces = async (query: string) => {
     if (!query.trim()) {
@@ -159,18 +159,51 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
     }
   }
 
-  const handleMapClick = (coords: LocationCoords) => {
-    if (!selectingFor) return
+  const handleMapClick = async (coords: LocationCoords) => {
+    // Se não estiver selecionando nada, iniciar seleção de origem
+    if (!selectingFor) {
+      if (!origin) {
+        setSelectingFor('origin')
+        return
+      } else if (!destination) {
+        setSelectingFor('destination')
+        return
+      }
+      return
+    }
+
+    // Buscar endereço do local clicado
+    let address = 'Local selecionado no mapa'
+    try {
+      const { data, error } = await supabase.functions.invoke('google-maps-proxy', {
+        body: {
+          action: 'reverse-geocode',
+          lat: coords.lat,
+          lng: coords.lng,
+        },
+      })
+      
+      if (!error && data?.results?.[0]) {
+        address = data.results[0].formatted_address
+      }
+    } catch (error) {
+      console.error('Erro ao buscar endereço:', error)
+    }
 
     const location: LocationSelection = {
       coords,
-      address: 'Local selecionado no mapa',
+      address,
       type: 'selected',
     }
 
     if (selectingFor === 'origin') {
       setOrigin(location)
       onLocationSelect?.('origin', location)
+      // Após selecionar origem, automaticamente iniciar seleção de destino
+      if (!destination) {
+        setSelectingFor('destination')
+        return
+      }
     } else if (selectingFor === 'destination') {
       setDestination(location)
       onLocationSelect?.('destination', location)
@@ -261,19 +294,39 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
           <div className="flex gap-2">
             <Button
               variant={selectingFor === 'origin' ? 'default' : 'outline'}
-              onClick={() => setSelectingFor('origin')}
+              onClick={() => setSelectingFor(selectingFor === 'origin' ? null : 'origin')}
               className="flex-1"
             >
-              {selectingFor === 'origin' ? 'Clique no mapa para origem' : 'Definir Origem'}
+              {selectingFor === 'origin' ? 'Cancelar seleção' : 'Definir Origem'}
             </Button>
             <Button
               variant={selectingFor === 'destination' ? 'default' : 'outline'}
-              onClick={() => setSelectingFor('destination')}
+              onClick={() => setSelectingFor(selectingFor === 'destination' ? null : 'destination')}
               className="flex-1"
             >
-              {selectingFor === 'destination' ? 'Clique no mapa para destino' : 'Definir Destino'}
+              {selectingFor === 'destination' ? 'Cancelar seleção' : 'Definir Destino'}
             </Button>
           </div>
+
+          {/* Instructions */}
+          {selectingFor && (
+            <div className="p-3 bg-primary/10 rounded-lg">
+              <p className="text-sm text-center">
+                {selectingFor === 'origin' 
+                  ? '📍 Clique no mapa para definir a origem'
+                  : '🎯 Clique no mapa para definir o destino'
+                }
+              </p>
+            </div>
+          )}
+
+          {!selectingFor && !origin && (
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-sm text-center text-muted-foreground">
+                Clique em "Definir Origem" e depois clique no mapa para selecionar o ponto de partida
+              </p>
+            </div>
+          )}
 
           {/* Current Location Button */}
           {currentLocation && (
@@ -363,7 +416,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
       {/* Map */}
       <GoogleMap
         center={mapCenter}
-        height="400px"
+        height="500px"
         markers={markers}
         onLocationSelect={handleMapClick}
         showRoute={
@@ -371,9 +424,11 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
             ? {
                 origin: origin.coords,
                 destination: destination.coords,
+                color: '#3B82F6'
               }
             : undefined
         }
+        className="cursor-pointer"
       />
     </div>
   )

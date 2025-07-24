@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Loader } from '@googlemaps/js-api-loader'
 import { LocationCoords } from '@/hooks/useGeolocation'
+import { supabase } from '@/integrations/supabase/client'
 
 interface GoogleMapProps {
   center?: LocationCoords
@@ -42,13 +43,21 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
 
   useEffect(() => {
     const initMap = async () => {
-      const loader = new Loader({
-        apiKey: '', // A API key será fornecida via proxy
-        version: 'weekly',
-        libraries: ['places', 'geometry'],
-      })
-
       try {
+        // Buscar a API key do Google Maps via edge function
+        const { data: keyData, error: keyError } = await supabase.functions.invoke('get-maps-key')
+        
+        if (keyError || !keyData?.apiKey) {
+          console.error('Erro ao obter API key:', keyError)
+          return
+        }
+
+        const loader = new Loader({
+          apiKey: keyData.apiKey,
+          version: 'weekly',
+          libraries: ['places', 'geometry'],
+        })
+
         await loader.load()
         
         if (mapRef.current) {
