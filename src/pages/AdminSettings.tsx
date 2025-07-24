@@ -85,7 +85,9 @@ export default function AdminSettings() {
   const handleInputChange = (field: string, value: string | number) => {
     setFormData(prev => ({
       ...prev,
-      [field]: typeof value === 'string' ? parseFloat(value) || 0 : value,
+      [field]: field === 'pricing_model' || field === 'fee_type' 
+        ? value 
+        : typeof value === 'string' ? parseFloat(value) || 0 : value,
     }));
   };
 

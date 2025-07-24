@@ -69,6 +69,23 @@ export const useSystemSettings = () => {
 
   useEffect(() => {
     fetchSettings();
+
+    // Subscribe to real-time changes
+    const channel = supabase
+      .channel('system_settings_changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'system_settings'
+      }, (payload) => {
+        console.log('System settings changed:', payload);
+        fetchSettings();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   return {
