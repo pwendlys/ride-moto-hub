@@ -214,41 +214,45 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
         
         const distanceKm = leg.distance.value / 1000
         
-        // Use dynamic pricing from system settings
-        if (!systemSettings) {
-          toast.error('Configurações de preço não carregadas')
-          return
+        // Use dynamic pricing from system settings or defaults
+        const settings = systemSettings || {
+          fixed_rate: 5.0,
+          price_per_km: 2.5,
+          minimum_fare: 8.0,
+          app_fee_percentage: 20.0,
+          pricing_model: 'per_km',
+          fee_type: 'percentage',
         }
 
         let totalPrice = 0
         let basePrice = 0
         let distancePrice = 0
 
-        if (systemSettings.pricing_model === 'fixed') {
+        if (settings.pricing_model === 'fixed') {
           // Fixed pricing model
-          totalPrice = systemSettings.fixed_rate
-          basePrice = systemSettings.fixed_rate
+          totalPrice = settings.fixed_rate
+          basePrice = settings.fixed_rate
           distancePrice = 0
         } else {
           // Per kilometer pricing model
-          basePrice = systemSettings.fixed_rate
-          distancePrice = distanceKm * systemSettings.price_per_km
+          basePrice = settings.fixed_rate
+          distancePrice = distanceKm * settings.price_per_km
           totalPrice = basePrice + distancePrice
         }
 
         // Apply minimum fare
-        const finalPrice = Math.max(totalPrice, systemSettings.minimum_fare)
+        const finalPrice = Math.max(totalPrice, settings.minimum_fare)
 
         // Calculate app fee and driver earnings
         let appFee = 0
         let driverEarnings = 0
 
-        if (systemSettings.fee_type === 'percentage') {
-          appFee = finalPrice * (systemSettings.app_fee_percentage / 100)
+        if (settings.fee_type === 'percentage') {
+          appFee = finalPrice * (settings.app_fee_percentage / 100)
           driverEarnings = finalPrice - appFee
         } else {
           // Fixed amount fee (not implemented in schema yet, but keeping logic)
-          appFee = systemSettings.app_fee_percentage
+          appFee = settings.app_fee_percentage
           driverEarnings = finalPrice - appFee
         }
 
@@ -263,8 +267,8 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
           priceBreakdown: {
             basePrice,
             distancePrice,
-            minimumFare: systemSettings.minimum_fare,
-            pricingModel: systemSettings.pricing_model
+            minimumFare: settings.minimum_fare,
+            pricingModel: settings.pricing_model
           }
         }
 
@@ -428,7 +432,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
           </div>
 
           {/* Route Summary */}
-          {isRouteValid && routeInfo && systemSettings && (
+          {isRouteValid && routeInfo && (
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-sm">Resumo da Viagem</h3>
@@ -470,32 +474,32 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
                   <span className="text-xs font-medium">Detalhamento do Preço</span>
                 </div>
                 <div className="space-y-1 text-xs">
-                  {systemSettings.pricing_model === 'per_km' ? (
+                  {routeInfo.priceBreakdown.pricingModel === 'per_km' ? (
                     <>
                       <div className="flex justify-between">
                         <span>Taxa base:</span>
                         <span>R$ {routeInfo.priceBreakdown.basePrice.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Distância ({routeInfo.distance.toFixed(1)} km × R$ {systemSettings.price_per_km.toFixed(2)}):</span>
+                        <span>Distância ({routeInfo.distance.toFixed(1)} km × R$ {(systemSettings?.price_per_km || 2.5).toFixed(2)}):</span>
                         <span>R$ {routeInfo.priceBreakdown.distancePrice.toFixed(2)}</span>
                       </div>
-                      {routeInfo.price === systemSettings.minimum_fare && (
+                      {routeInfo.price === routeInfo.priceBreakdown.minimumFare && (
                         <div className="flex justify-between text-primary">
                           <span>Tarifa mínima aplicada:</span>
-                          <span>R$ {systemSettings.minimum_fare.toFixed(2)}</span>
+                          <span>R$ {routeInfo.priceBreakdown.minimumFare.toFixed(2)}</span>
                         </div>
                       )}
                     </>
                   ) : (
                     <div className="flex justify-between">
                       <span>Preço fixo:</span>
-                      <span>R$ {systemSettings.fixed_rate.toFixed(2)}</span>
+                      <span>R$ {routeInfo.priceBreakdown.basePrice.toFixed(2)}</span>
                     </div>
                   )}
                   <div className="border-t pt-1 mt-2">
                     <div className="flex justify-between">
-                      <span>Taxa do app ({systemSettings.app_fee_percentage}%):</span>
+                      <span>Taxa do app ({(systemSettings?.app_fee_percentage || 20)}%):</span>
                       <span>R$ {routeInfo.appFee.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between font-medium">
@@ -536,14 +540,14 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
           )}
           
           {!settingsLoading && !systemSettings && (
-            <div className="text-center p-3 bg-destructive/10 rounded-lg">
-              <p className="text-sm text-destructive">
-                ❌ Erro ao carregar configurações de preço
+            <div className="text-center p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                ⚠️ Usando configurações de preço padrão - Erro ao carregar do servidor
               </p>
             </div>
           )}
           
-          {!origin && !locationLoading && systemSettings && (
+          {!origin && !locationLoading && !settingsLoading && (
             <div className="text-center p-3 bg-muted/50 rounded-lg">
               <p className="text-sm text-muted-foreground">
                 📍 Defina o local de origem para começar
@@ -551,7 +555,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
             </div>
           )}
           
-          {origin && !destination && systemSettings && (
+          {origin && !destination && !settingsLoading && (
             <div className="text-center p-3 bg-muted/50 rounded-lg">
               <p className="text-sm text-muted-foreground">
                 🎯 Agora defina o destino da viagem

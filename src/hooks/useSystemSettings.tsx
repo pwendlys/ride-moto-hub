@@ -27,37 +27,49 @@ export const useSystemSettings = () => {
         .from('system_settings')
         .select('*')
         .limit(1)
-        .single();
+        .maybeSingle();
 
       if (fetchError) {
-        if (fetchError.code === 'PGRST116') {
-          // No settings found, create default
-          const defaultSettings = {
-            fixed_rate: 5.0,
-            price_per_km: 2.5,
-            minimum_fare: 8.0,
-            app_fee_percentage: 20.0,
-            pricing_model: 'per_km',
-            fee_type: 'percentage',
-          };
+        throw fetchError;
+      }
 
-          const { data: newSettings, error: insertError } = await supabase
-            .from('system_settings')
-            .insert(defaultSettings)
-            .select()
-            .single();
-
-          if (insertError) throw insertError;
-          setSettings(newSettings);
-        } else {
-          throw fetchError;
-        }
-      } else {
+      if (data) {
         setSettings(data);
+      } else {
+        // Usar configurações padrão como fallback se não houver no banco
+        const defaultSettings: SystemSettings = {
+          id: 'default',
+          fixed_rate: 5.0,
+          price_per_km: 2.5,
+          minimum_fare: 8.0,
+          app_fee_percentage: 20.0,
+          pricing_model: 'per_km',
+          fee_type: 'percentage',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        
+        setSettings(defaultSettings);
+        console.warn('Usando configurações padrão - nenhuma configuração encontrada no banco');
       }
     } catch (err) {
       console.error('Error fetching system settings:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch settings');
+      
+      // Usar configurações padrão em caso de erro
+      const defaultSettings: SystemSettings = {
+        id: 'default',
+        fixed_rate: 5.0,
+        price_per_km: 2.5,
+        minimum_fare: 8.0,
+        app_fee_percentage: 20.0,
+        pricing_model: 'per_km',
+        fee_type: 'percentage',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      
+      setSettings(defaultSettings);
+      setError('Usando configurações padrão - erro ao carregar do servidor');
     } finally {
       setLoading(false);
     }

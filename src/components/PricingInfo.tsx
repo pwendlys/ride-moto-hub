@@ -27,7 +27,7 @@ export const PricingInfo = () => {
     )
   }
 
-  if (error || !settings) {
+  if (!settings) {
     return (
       <Card>
         <CardHeader>
@@ -37,8 +37,8 @@ export const PricingInfo = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-destructive">
-            Erro ao carregar configurações de preço
+          <p className="text-sm text-muted-foreground">
+            {error || 'Carregando configurações de preço...'}
           </p>
         </CardContent>
       </Card>
