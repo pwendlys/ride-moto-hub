@@ -1,7 +1,7 @@
 project_id = "bnypgorcixeupgzkdpvm"
 
 [functions.google-maps-proxy]
-verify_jwt = false
+verify_jwt = true
 
 [functions.get-maps-key]
-verify_jwt = false
+verify_jwt = true
