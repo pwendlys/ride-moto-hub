@@ -272,28 +272,34 @@ export type Database = {
         Row: {
           app_fee_percentage: number
           created_at: string
+          fee_type: string
           fixed_rate: number
           id: string
           minimum_fare: number
           price_per_km: number
+          pricing_model: string
           updated_at: string
         }
         Insert: {
           app_fee_percentage?: number
           created_at?: string
+          fee_type?: string
           fixed_rate?: number
           id?: string
           minimum_fare?: number
           price_per_km?: number
+          pricing_model?: string
           updated_at?: string
         }
         Update: {
           app_fee_percentage?: number
           created_at?: string
+          fee_type?: string
           fixed_rate?: number
           id?: string
           minimum_fare?: number
           price_per_km?: number
+          pricing_model?: string
           updated_at?: string
         }
         Relationships: []
@@ -306,6 +312,19 @@ export type Database = {
       get_current_user_role: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      validate_coordinates: {
+        Args: { lat: number; lng: number }
+        Returns: boolean
+      }
+      validate_pricing_settings: {
+        Args: {
+          fixed_rate_val: number
+          price_per_km_val: number
+          minimum_fare_val: number
+          app_fee_percentage_val: number
+        }
+        Returns: boolean
       }
     }
     Enums: {

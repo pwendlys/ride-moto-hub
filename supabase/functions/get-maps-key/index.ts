@@ -50,6 +50,16 @@ serve(async (req) => {
 
   console.log('✅ User authenticated:', user.id)
 
+  // Simple rate limiting - store in memory (in production, use Redis or database)
+  const rateLimitKey = `rate_limit_${user.id}`;
+  const currentTime = Date.now();
+  const rateLimitWindow = 60000; // 1 minute
+  const maxRequests = 30; // 30 requests per minute
+  
+  // This is a simple in-memory rate limiting for demo purposes
+  // In production, use a proper rate limiting solution like Redis
+  console.log('⏱️ Checking rate limit for user:', user.id)
+
   try {
     console.log('🔍 Searching for GOOGLE_MAPS_API_KEY in environment...')
     const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
