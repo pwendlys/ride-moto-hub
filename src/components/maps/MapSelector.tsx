@@ -42,19 +42,51 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
   const [mapCenter, setMapCenter] = useState<LocationCoords>({ lat: -18.9146, lng: -48.2754 })
   const [routeInfo, setRouteInfo] = useState<any>(null)
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false)
+  const [isGettingAddress, setIsGettingAddress] = useState(false)
 
-  // Auto-set current location as origin
+  // Function to get address from coordinates using reverse geocoding
+  const getAddressFromCoords = async (coords: LocationCoords): Promise<string> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('google-maps-proxy', {
+        body: {
+          action: 'reverse-geocode',
+          lat: coords.lat,
+          lng: coords.lng,
+        },
+      })
+
+      if (error) throw error
+
+      if (data.results && data.results.length > 0) {
+        return data.results[0].formatted_address
+      }
+      
+      return 'Localização atual'
+    } catch (error) {
+      console.error('Erro no reverse geocoding:', error)
+      return 'Localização atual'
+    }
+  }
+
+  // Auto-set current location as origin with reverse geocoding
   useEffect(() => {
     if (currentLocation && !origin && !locationLoading) {
-      const currentLocationData: LocationSelection = {
-        coords: currentLocation,
-        address: 'Localização atual',
-        type: 'current',
+      const setCurrentLocationWithAddress = async () => {
+        const address = await getAddressFromCoords(currentLocation)
+        
+        const currentLocationData: LocationSelection = {
+          coords: currentLocation,
+          address,
+          type: 'current',
+        }
+        
+        setOrigin(currentLocationData)
+        setOriginQuery(address)
+        setMapCenter(currentLocation)
+        onLocationSelect?.('origin', currentLocationData)
       }
-      setOrigin(currentLocationData)
-      setOriginQuery('Localização atual')
-      setMapCenter(currentLocation)
-      onLocationSelect?.('origin', currentLocationData)
+
+      setCurrentLocationWithAddress()
     }
   }, [currentLocation, origin, onLocationSelect, locationLoading])
 
@@ -96,7 +128,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
   // Debounce search
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (originQuery && originQuery !== 'Localização atual') {
+      if (originQuery && originQuery !== 'Localização atual' && originQuery !== 'Obtendo endereço...') {
         searchPlaces(originQuery, 'origin')
       }
     }, 300)
@@ -194,20 +226,32 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
     }
   }
 
-  const useCurrentLocation = () => {
+  const useCurrentLocation = async () => {
     if (!currentLocation) return
 
-    const currentLocationData: LocationSelection = {
-      coords: currentLocation,
-      address: 'Localização atual',
-      type: 'current',
-    }
+    setIsGettingAddress(true)
     
-    setOrigin(currentLocationData)
-    setOriginQuery('Localização atual')
-    setOriginResults([])
-    setMapCenter(currentLocation)
-    onLocationSelect?.('origin', currentLocationData)
+    // Show loading state
+    setOriginQuery('Obtendo endereço...')
+    
+    try {
+      // Get real address using reverse geocoding
+      const address = await getAddressFromCoords(currentLocation)
+
+      const currentLocationData: LocationSelection = {
+        coords: currentLocation,
+        address,
+        type: 'current',
+      }
+      
+      setOrigin(currentLocationData)
+      setOriginQuery(address)
+      setOriginResults([])
+      setMapCenter(currentLocation)
+      onLocationSelect?.('origin', currentLocationData)
+    } finally {
+      setIsGettingAddress(false)
+    }
   }
 
   // Calculate route when both locations are set
@@ -264,10 +308,14 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
                 variant="outline"
                 size="icon"
                 onClick={useCurrentLocation}
-                disabled={!currentLocation || locationLoading}
+                disabled={!currentLocation || locationLoading || isGettingAddress}
                 title="Usar localização atual"
               >
-                <Navigation className="h-4 w-4" />
+                {isGettingAddress ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                ) : (
+                  <Navigation className="h-4 w-4" />
+                )}
               </Button>
             </div>
             
