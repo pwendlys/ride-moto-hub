@@ -155,7 +155,7 @@ export default function RideRequest() {
                   <div className="pt-4">
                     <Button
                       onClick={handleRequestRide}
-                      disabled={isRequesting}
+                      disabled={isRequesting || !routeInfo}
                       className="w-full"
                       size="lg"
                     >

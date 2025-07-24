@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { MapPin, Navigation, Search, X } from 'lucide-react'
+import { MapPin, Navigation, Target, Clock, DollarSign } from 'lucide-react'
 import { GoogleMap } from './GoogleMap'
 import { LocationCoords, useGeolocation } from '@/hooks/useGeolocation'
 import { supabase } from '@/integrations/supabase/client'
@@ -30,17 +30,20 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
   onRouteCalculated,
   onLocationSelect,
 }) => {
-  const { coords: currentLocation, loading: locationLoading, error: locationError } = useGeolocation()
+  const { coords: currentLocation, loading: locationLoading } = useGeolocation()
   const [origin, setOrigin] = useState<LocationSelection | null>(null)
   const [destination, setDestination] = useState<LocationSelection | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<any[]>([])
-  const [searchLoading, setSearchLoading] = useState(false)
-  const [selectingFor, setSelectingFor] = useState<'origin' | 'destination' | null>(null)
+  const [originQuery, setOriginQuery] = useState('')
+  const [destinationQuery, setDestinationQuery] = useState('')
+  const [originResults, setOriginResults] = useState<any[]>([])
+  const [destinationResults, setDestinationResults] = useState<any[]>([])
+  const [isSearchingOrigin, setIsSearchingOrigin] = useState(false)
+  const [isSearchingDestination, setIsSearchingDestination] = useState(false)
   const [mapCenter, setMapCenter] = useState<LocationCoords>({ lat: -18.9146, lng: -48.2754 })
   const [routeInfo, setRouteInfo] = useState<any>(null)
+  const [isCalculatingRoute, setIsCalculatingRoute] = useState(false)
 
-  // Set current location as origin when available
+  // Auto-set current location as origin
   useEffect(() => {
     if (currentLocation && !origin && !locationLoading) {
       const currentLocationData: LocationSelection = {
@@ -49,18 +52,23 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
         type: 'current',
       }
       setOrigin(currentLocationData)
+      setOriginQuery('Localização atual')
       setMapCenter(currentLocation)
       onLocationSelect?.('origin', currentLocationData)
     }
   }, [currentLocation, origin, onLocationSelect, locationLoading])
 
-  const searchPlaces = async (query: string) => {
+  // Debounced search function
+  const searchPlaces = useCallback(async (query: string, type: 'origin' | 'destination') => {
     if (!query.trim()) {
-      setSearchResults([])
+      if (type === 'origin') setOriginResults([])
+      else setDestinationResults([])
       return
     }
 
-    setSearchLoading(true)
+    if (type === 'origin') setIsSearchingOrigin(true)
+    else setIsSearchingDestination(true)
+
     try {
       const { data, error } = await supabase.functions.invoke('google-maps-proxy', {
         body: {
@@ -71,16 +79,40 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
 
       if (error) throw error
 
-      setSearchResults(data.predictions || [])
+      if (type === 'origin') {
+        setOriginResults(data.predictions || [])
+      } else {
+        setDestinationResults(data.predictions || [])
+      }
     } catch (error) {
       console.error('Erro na busca:', error)
       toast.error('Erro ao buscar endereços')
     } finally {
-      setSearchLoading(false)
+      if (type === 'origin') setIsSearchingOrigin(false)
+      else setIsSearchingDestination(false)
     }
-  }
+  }, [])
 
-  const selectPlace = async (place: any) => {
+  // Debounce search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (originQuery && originQuery !== 'Localização atual') {
+        searchPlaces(originQuery, 'origin')
+      }
+    }, 300)
+    return () => clearTimeout(timeoutId)
+  }, [originQuery, searchPlaces])
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (destinationQuery) {
+        searchPlaces(destinationQuery, 'destination')
+      }
+    }, 300)
+    return () => clearTimeout(timeoutId)
+  }, [destinationQuery, searchPlaces])
+
+  const selectPlace = async (place: any, type: 'origin' | 'destination') => {
     try {
       const { data, error } = await supabase.functions.invoke('google-maps-proxy', {
         body: {
@@ -100,17 +132,18 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
         type: 'searched',
       }
 
-      if (selectingFor === 'origin') {
+      if (type === 'origin') {
         setOrigin(location)
+        setOriginQuery(data.result.formatted_address)
+        setOriginResults([])
         onLocationSelect?.('origin', location)
-      } else if (selectingFor === 'destination') {
+      } else {
         setDestination(location)
+        setDestinationQuery(data.result.formatted_address)
+        setDestinationResults([])
         onLocationSelect?.('destination', location)
       }
 
-      setSearchQuery('')
-      setSearchResults([])
-      setSelectingFor(null)
       setMapCenter(location.coords)
     } catch (error) {
       console.error('Erro ao obter detalhes do local:', error)
@@ -121,6 +154,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
   const calculateRoute = async () => {
     if (!origin || !destination) return
 
+    setIsCalculatingRoute(true)
     try {
       const { data, error } = await supabase.functions.invoke('google-maps-proxy', {
         body: {
@@ -136,9 +170,8 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
         const route = data.routes[0]
         const leg = route.legs[0]
         
-        // Calcular preço baseado na distância
         const distanceKm = leg.distance.value / 1000
-        const basePrice = 8.00 // Tarifa mínima
+        const basePrice = 8.00
         const pricePerKm = 2.50
         const estimatedPrice = Math.max(basePrice, basePrice + (distanceKm * pricePerKm))
 
@@ -146,7 +179,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
           origin,
           destination,
           distance: distanceKm,
-          duration: leg.duration.value / 60, // em minutos
+          duration: leg.duration.value / 60,
           price: estimatedPrice,
         }
 
@@ -156,60 +189,25 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
     } catch (error) {
       console.error('Erro no cálculo de rota:', error)
       toast.error('Erro ao calcular rota')
+    } finally {
+      setIsCalculatingRoute(false)
     }
   }
 
-  const handleMapClick = async (coords: LocationCoords) => {
-    // Se não estiver selecionando nada, iniciar seleção de origem
-    if (!selectingFor) {
-      if (!origin) {
-        setSelectingFor('origin')
-        return
-      } else if (!destination) {
-        setSelectingFor('destination')
-        return
-      }
-      return
-    }
+  const useCurrentLocation = () => {
+    if (!currentLocation) return
 
-    // Buscar endereço do local clicado
-    let address = 'Local selecionado no mapa'
-    try {
-      const { data, error } = await supabase.functions.invoke('google-maps-proxy', {
-        body: {
-          action: 'reverse-geocode',
-          lat: coords.lat,
-          lng: coords.lng,
-        },
-      })
-      
-      if (!error && data?.results?.[0]) {
-        address = data.results[0].formatted_address
-      }
-    } catch (error) {
-      console.error('Erro ao buscar endereço:', error)
+    const currentLocationData: LocationSelection = {
+      coords: currentLocation,
+      address: 'Localização atual',
+      type: 'current',
     }
-
-    const location: LocationSelection = {
-      coords,
-      address,
-      type: 'selected',
-    }
-
-    if (selectingFor === 'origin') {
-      setOrigin(location)
-      onLocationSelect?.('origin', location)
-      // Após selecionar origem, automaticamente iniciar seleção de destino
-      if (!destination) {
-        setSelectingFor('destination')
-        return
-      }
-    } else if (selectingFor === 'destination') {
-      setDestination(location)
-      onLocationSelect?.('destination', location)
-    }
-
-    setSelectingFor(null)
+    
+    setOrigin(currentLocationData)
+    setOriginQuery('Localização atual')
+    setOriginResults([])
+    setMapCenter(currentLocation)
+    onLocationSelect?.('origin', currentLocationData)
   }
 
   // Calculate route when both locations are set
@@ -235,201 +233,191 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
     })
   }
 
+  const isRouteValid = origin && destination
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <MapPin className="h-5 w-5" />
-            Selecionar Localização
+            Definir Trajeto
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Search Bar */}
-          <div className="relative">
+        <CardContent className="space-y-6">
+          {/* Origin Field */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">
+              📍 Origem
+            </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar endereço..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value)
-                    searchPlaces(e.target.value)
-                  }}
-                  className="pl-10"
+                  placeholder={locationLoading ? "Obtendo localização..." : "Digite o endereço de origem"}
+                  value={originQuery}
+                  onChange={(e) => setOriginQuery(e.target.value)}
+                  disabled={locationLoading}
+                  className="pr-10"
                 />
               </div>
-              {selectingFor && (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => setSelectingFor(null)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={useCurrentLocation}
+                disabled={!currentLocation || locationLoading}
+                title="Usar localização atual"
+              >
+                <Navigation className="h-4 w-4" />
+              </Button>
             </div>
-
-            {/* Search Results */}
-            {searchResults.length > 0 && (
-              <div className="absolute top-full z-10 mt-1 w-full rounded-md border bg-card shadow-lg">
-                {searchResults.map((place, index) => (
-                  <button
-                    key={index}
-                    className="w-full p-3 text-left hover:bg-accent"
-                    onClick={() => selectPlace(place)}
-                  >
-                    <div className="font-medium">{place.structured_formatting.main_text}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {place.structured_formatting.secondary_text}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Location Selection Buttons */}
-          <div className="flex gap-2">
-            <Button
-              variant={selectingFor === 'origin' ? 'default' : 'outline'}
-              onClick={() => setSelectingFor(selectingFor === 'origin' ? null : 'origin')}
-              className="flex-1"
-            >
-              {selectingFor === 'origin' ? 'Cancelar seleção' : 'Definir Origem'}
-            </Button>
-            <Button
-              variant={selectingFor === 'destination' ? 'default' : 'outline'}
-              onClick={() => setSelectingFor(selectingFor === 'destination' ? null : 'destination')}
-              className="flex-1"
-            >
-              {selectingFor === 'destination' ? 'Cancelar seleção' : 'Definir Destino'}
-            </Button>
-          </div>
-
-          {/* Instructions */}
-          {selectingFor && (
-            <div className="p-3 bg-primary/10 rounded-lg">
-              <p className="text-sm text-center">
-                {selectingFor === 'origin' 
-                  ? '📍 Clique no mapa para definir a origem'
-                  : '🎯 Clique no mapa para definir o destino'
-                }
-              </p>
-            </div>
-          )}
-
-          {!selectingFor && !origin && (
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="text-sm text-center text-muted-foreground">
-                Clique em "Definir Origem" e depois clique no mapa para selecionar o ponto de partida
-              </p>
-            </div>
-          )}
-
-          {/* Current Location Button */}
-          {currentLocation && (
-            <Button
-              variant="outline"
-              onClick={() => {
-                const currentLocationData: LocationSelection = {
-                  coords: currentLocation,
-                  address: 'Localização atual',
-                  type: 'current',
-                }
-                if (selectingFor === 'origin') {
-                  setOrigin(currentLocationData)
-                  onLocationSelect?.('origin', currentLocationData)
-                } else if (selectingFor === 'destination') {
-                  setDestination(currentLocationData)
-                  onLocationSelect?.('destination', currentLocationData)
-                }
-                setSelectingFor(null)
-              }}
-              disabled={!selectingFor}
-              className="w-full"
-            >
-              <Navigation className="mr-2 h-4 w-4" />
-              Usar Localização Atual
-            </Button>
-          )}
-
-          {/* Selected Locations */}
-          <div className="space-y-2">
-            {origin && (
-              <div className="flex items-center justify-between p-2 bg-accent rounded-lg">
-                <div>
-                  <Badge variant="secondary" className="mb-1">Origem</Badge>
-                  <p className="text-sm">{origin.address}</p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setOrigin(null)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
             
-            {destination && (
-              <div className="flex items-center justify-between p-2 bg-accent rounded-lg">
-                <div>
-                  <Badge variant="secondary" className="mb-1">Destino</Badge>
-                  <p className="text-sm">{destination.address}</p>
+            {/* Origin Autocomplete Results */}
+            {originResults.length > 0 && (
+              <div className="relative">
+                <div className="absolute top-0 z-20 w-full rounded-md border bg-card shadow-lg max-h-60 overflow-y-auto">
+                  {originResults.map((place, index) => (
+                    <button
+                      key={index}
+                      className="w-full p-3 text-left hover:bg-accent border-b border-border last:border-b-0"
+                      onClick={() => selectPlace(place, 'origin')}
+                    >
+                      <div className="font-medium text-sm">{place.structured_formatting.main_text}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {place.structured_formatting.secondary_text}
+                      </div>
+                    </button>
+                  ))}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setDestination(null)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
               </div>
             )}
           </div>
 
-          {/* Route Information */}
-          {routeInfo && (
-            <div className="p-4 bg-primary/10 rounded-lg">
-              <h3 className="font-semibold mb-2">Informações da Rota</h3>
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Distância:</span>
-                  <p className="font-medium">{routeInfo.distance.toFixed(1)} km</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Tempo:</span>
-                  <p className="font-medium">{Math.round(routeInfo.duration)} min</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Preço:</span>
-                  <p className="font-medium">R$ {routeInfo.price.toFixed(2)}</p>
+          {/* Destination Field */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground">
+              🎯 Destino
+            </label>
+            <div className="relative">
+              <Input
+                placeholder="Digite o endereço de destino"
+                value={destinationQuery}
+                onChange={(e) => setDestinationQuery(e.target.value)}
+              />
+            </div>
+            
+            {/* Destination Autocomplete Results */}
+            {destinationResults.length > 0 && (
+              <div className="relative">
+                <div className="absolute top-0 z-20 w-full rounded-md border bg-card shadow-lg max-h-60 overflow-y-auto">
+                  {destinationResults.map((place, index) => (
+                    <button
+                      key={index}
+                      className="w-full p-3 text-left hover:bg-accent border-b border-border last:border-b-0"
+                      onClick={() => selectPlace(place, 'destination')}
+                    >
+                      <div className="font-medium text-sm">{place.structured_formatting.main_text}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {place.structured_formatting.secondary_text}
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
+            )}
+          </div>
+
+          {/* Route Summary */}
+          {isRouteValid && routeInfo && (
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-sm">Resumo da Viagem</h3>
+                {isCalculatingRoute && (
+                  <div className="text-xs text-muted-foreground">Calculando...</div>
+                )}
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center">
+                  <div className="flex items-center justify-center mb-1">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="text-xs text-muted-foreground">Distância</div>
+                  <div className="font-semibold text-sm">{routeInfo.distance.toFixed(1)} km</div>
+                </div>
+                
+                <div className="text-center">
+                  <div className="flex items-center justify-center mb-1">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="text-xs text-muted-foreground">Tempo</div>
+                  <div className="font-semibold text-sm">{Math.round(routeInfo.duration)} min</div>
+                </div>
+                
+                <div className="text-center">
+                  <div className="flex items-center justify-center mb-1">
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="text-xs text-muted-foreground">Preço</div>
+                  <div className="font-semibold text-sm">R$ {routeInfo.price.toFixed(2)}</div>
+                </div>
+              </div>
+
+              {/* Address Confirmation */}
+              <div className="mt-4 pt-3 border-t border-primary/20">
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-start gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                    <div>
+                      <span className="font-medium">De:</span> {origin.address}
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="w-2 h-2 bg-red-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                    <div>
+                      <span className="font-medium">Para:</span> {destination.address}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Status Messages */}
+          {!origin && !locationLoading && (
+            <div className="text-center p-3 bg-muted/50 rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                📍 Defina o local de origem para começar
+              </p>
+            </div>
+          )}
+          
+          {origin && !destination && (
+            <div className="text-center p-3 bg-muted/50 rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                🎯 Agora defina o destino da viagem
+              </p>
             </div>
           )}
         </CardContent>
       </Card>
 
       {/* Map */}
-      <GoogleMap
-        center={mapCenter}
-        height="500px"
-        markers={markers}
-        onLocationSelect={handleMapClick}
-        showRoute={
-          origin && destination
-            ? {
-                origin: origin.coords,
-                destination: destination.coords,
-                color: '#3B82F6'
-              }
-            : undefined
-        }
-        className="cursor-pointer"
-      />
+      <div className="rounded-lg overflow-hidden border">
+        <GoogleMap
+          center={mapCenter}
+          height="400px"
+          markers={markers}
+          showRoute={
+            isRouteValid
+              ? {
+                  origin: origin.coords,
+                  destination: destination.coords,
+                  color: '#3B82F6'
+                }
+              : undefined
+          }
+        />
+      </div>
     </div>
   )
 }
