@@ -2,13 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useDriverLocation } from '@/hooks/useDriverLocation';
-import { useDriverRideNotifications, useRides } from '@/hooks/useRides';
+import { useRideQueue } from '@/hooks/useRideQueue';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { GoogleMap } from '@/components/maps/GoogleMap';
-import { RideNotification } from '@/components/RideNotification';
+import { RideNotificationWithTimer } from '@/components/RideNotificationWithTimer';
 import { useToast } from '@/hooks/use-toast';
 import { 
   MapPin, 
@@ -31,14 +31,13 @@ const DriverOnline = () => {
   // Hooks
   const currentLocation = useGeolocation(true, 10000);
   const driverLocation = useDriverLocation(true);
-  const rideNotifications = useDriverRideNotifications();
-  const { acceptRide } = useRides();
+  const rideQueue = useRideQueue();
 
   // Start listening for rides when component mounts
   useEffect(() => {
-    rideNotifications.startListening();
+    rideQueue.startListening();
     return () => {
-      rideNotifications.stopListening();
+      rideQueue.stopListening();
     };
   }, []);
 
@@ -55,7 +54,7 @@ const DriverOnline = () => {
 
   const handleGoOffline = async () => {
     await driverLocation.setOnlineStatus(false);
-    rideNotifications.stopListening();
+    rideQueue.stopListening();
     toast({
       title: "Você está offline",
       description: "Voltando ao dashboard...",
@@ -63,22 +62,16 @@ const DriverOnline = () => {
     navigate('/dashboard');
   };
 
-  const handleAcceptRide = async (rideId: string) => {
-    try {
-      await acceptRide(rideId);
-      rideNotifications.removePendingRide(rideId);
+  const handleAcceptRide = async (notificationId: string, rideId: string) => {
+    const result = await rideQueue.acceptNotification(notificationId, rideId);
+    if (result.success) {
       navigate(`/active-ride/${rideId}`);
-    } catch (error) {
-      console.error('Error accepting ride:', error);
     }
+    return result;
   };
 
-  const handleDeclineRide = (rideId: string) => {
-    rideNotifications.removePendingRide(rideId);
-    toast({
-      title: "Corrida recusada",
-      description: "A corrida foi removida da sua lista.",
-    });
+  const handleDeclineRide = (notificationId: string) => {
+    rideQueue.declineNotification(notificationId);
   };
 
   if (currentLocation.loading) {
@@ -169,7 +162,7 @@ const DriverOnline = () => {
               </div>
               <div className="text-center p-4 bg-muted/50 rounded-lg">
                 <div className="text-lg font-semibold text-primary">
-                  {rideNotifications.pendingRides.length}
+                  {rideQueue.activeNotifications.length}
                 </div>
                 <div className="text-sm text-muted-foreground">Corridas Pendentes</div>
               </div>
@@ -218,22 +211,22 @@ const DriverOnline = () => {
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Corridas Disponíveis</h2>
             <div className="flex items-center gap-2">
-              {rideNotifications.isListening ? (
+              {rideQueue.isListening ? (
                 <Bell className="w-5 h-5 text-success" />
               ) : (
                 <BellOff className="w-5 h-5 text-muted-foreground" />
               )}
               <span className="text-sm text-muted-foreground">
-                {rideNotifications.isListening ? 'Escutando' : 'Desconectado'}
+                {rideQueue.isListening ? 'Escutando' : 'Desconectado'}
               </span>
             </div>
           </div>
 
-          {rideNotifications.pendingRides.length > 0 ? (
-            rideNotifications.pendingRides.map((ride) => (
-              <RideNotification
-                key={ride.id}
-                ride={ride}
+          {rideQueue.activeNotifications.length > 0 ? (
+            rideQueue.activeNotifications.map((notification) => (
+              <RideNotificationWithTimer
+                key={notification.id}
+                notification={notification}
                 onAccept={handleAcceptRide}
                 onDecline={handleDeclineRide}
               />
