@@ -3,10 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { MapPin, Navigation, Target, Clock, DollarSign } from 'lucide-react'
+import { MapPin, Navigation, Target, Clock, DollarSign, Info } from 'lucide-react'
 import { GoogleMap } from './GoogleMap'
 import { LocationCoords, useGeolocation } from '@/hooks/useGeolocation'
 import { supabase } from '@/integrations/supabase/client'
+import { useSystemSettings } from '@/hooks/useSystemSettings'
 import { toast } from 'sonner'
 
 interface LocationSelection {
@@ -22,6 +23,14 @@ interface MapSelectorProps {
     distance: number
     duration: number
     price: number
+    driverEarnings: number
+    appFee: number
+    priceBreakdown: {
+      basePrice: number
+      distancePrice: number
+      minimumFare: number
+      pricingModel: string
+    }
   }) => void
   onLocationSelect?: (type: 'origin' | 'destination', location: LocationSelection) => void
 }
@@ -31,6 +40,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
   onLocationSelect,
 }) => {
   const { coords: currentLocation, loading: locationLoading } = useGeolocation()
+  const { settings: systemSettings, loading: settingsLoading } = useSystemSettings()
   const [origin, setOrigin] = useState<LocationSelection | null>(null)
   const [destination, setDestination] = useState<LocationSelection | null>(null)
   const [originQuery, setOriginQuery] = useState('')
@@ -203,16 +213,59 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
         const leg = route.legs[0]
         
         const distanceKm = leg.distance.value / 1000
-        const basePrice = 8.00
-        const pricePerKm = 2.50
-        const estimatedPrice = Math.max(basePrice, basePrice + (distanceKm * pricePerKm))
+        
+        // Use dynamic pricing from system settings
+        if (!systemSettings) {
+          toast.error('Configurações de preço não carregadas')
+          return
+        }
+
+        let totalPrice = 0
+        let basePrice = 0
+        let distancePrice = 0
+
+        if (systemSettings.pricing_model === 'fixed') {
+          // Fixed pricing model
+          totalPrice = systemSettings.fixed_rate
+          basePrice = systemSettings.fixed_rate
+          distancePrice = 0
+        } else {
+          // Per kilometer pricing model
+          basePrice = systemSettings.fixed_rate
+          distancePrice = distanceKm * systemSettings.price_per_km
+          totalPrice = basePrice + distancePrice
+        }
+
+        // Apply minimum fare
+        const finalPrice = Math.max(totalPrice, systemSettings.minimum_fare)
+
+        // Calculate app fee and driver earnings
+        let appFee = 0
+        let driverEarnings = 0
+
+        if (systemSettings.fee_type === 'percentage') {
+          appFee = finalPrice * (systemSettings.app_fee_percentage / 100)
+          driverEarnings = finalPrice - appFee
+        } else {
+          // Fixed amount fee (not implemented in schema yet, but keeping logic)
+          appFee = systemSettings.app_fee_percentage
+          driverEarnings = finalPrice - appFee
+        }
 
         const routeData = {
           origin,
           destination,
           distance: distanceKm,
           duration: leg.duration.value / 60,
-          price: estimatedPrice,
+          price: finalPrice,
+          driverEarnings,
+          appFee,
+          priceBreakdown: {
+            basePrice,
+            distancePrice,
+            minimumFare: systemSettings.minimum_fare,
+            pricingModel: systemSettings.pricing_model
+          }
         }
 
         setRouteInfo(routeData)
@@ -375,7 +428,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
           </div>
 
           {/* Route Summary */}
-          {isRouteValid && routeInfo && (
+          {isRouteValid && routeInfo && systemSettings && (
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-sm">Resumo da Viagem</h3>
@@ -384,7 +437,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
                 )}
               </div>
               
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-4 mb-4">
                 <div className="text-center">
                   <div className="flex items-center justify-center mb-1">
                     <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -405,13 +458,56 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
                   <div className="flex items-center justify-center mb-1">
                     <DollarSign className="h-4 w-4 text-muted-foreground" />
                   </div>
-                  <div className="text-xs text-muted-foreground">Preço</div>
+                  <div className="text-xs text-muted-foreground">Preço Total</div>
                   <div className="font-semibold text-sm">R$ {routeInfo.price.toFixed(2)}</div>
                 </div>
               </div>
 
+              {/* Price Breakdown */}
+              <div className="mb-4 p-3 bg-card/50 rounded-lg border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs font-medium">Detalhamento do Preço</span>
+                </div>
+                <div className="space-y-1 text-xs">
+                  {systemSettings.pricing_model === 'per_km' ? (
+                    <>
+                      <div className="flex justify-between">
+                        <span>Taxa base:</span>
+                        <span>R$ {routeInfo.priceBreakdown.basePrice.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Distância ({routeInfo.distance.toFixed(1)} km × R$ {systemSettings.price_per_km.toFixed(2)}):</span>
+                        <span>R$ {routeInfo.priceBreakdown.distancePrice.toFixed(2)}</span>
+                      </div>
+                      {routeInfo.price === systemSettings.minimum_fare && (
+                        <div className="flex justify-between text-primary">
+                          <span>Tarifa mínima aplicada:</span>
+                          <span>R$ {systemSettings.minimum_fare.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex justify-between">
+                      <span>Preço fixo:</span>
+                      <span>R$ {systemSettings.fixed_rate.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="border-t pt-1 mt-2">
+                    <div className="flex justify-between">
+                      <span>Taxa do app ({systemSettings.app_fee_percentage}%):</span>
+                      <span>R$ {routeInfo.appFee.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between font-medium">
+                      <span>Motorista recebe:</span>
+                      <span>R$ {routeInfo.driverEarnings.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Address Confirmation */}
-              <div className="mt-4 pt-3 border-t border-primary/20">
+              <div className="pt-3 border-t border-primary/20">
                 <div className="space-y-2 text-xs">
                   <div className="flex items-start gap-2">
                     <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
@@ -431,7 +527,23 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
           )}
 
           {/* Status Messages */}
-          {!origin && !locationLoading && (
+          {settingsLoading && (
+            <div className="text-center p-3 bg-muted/50 rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                ⚙️ Carregando configurações de preço...
+              </p>
+            </div>
+          )}
+          
+          {!settingsLoading && !systemSettings && (
+            <div className="text-center p-3 bg-destructive/10 rounded-lg">
+              <p className="text-sm text-destructive">
+                ❌ Erro ao carregar configurações de preço
+              </p>
+            </div>
+          )}
+          
+          {!origin && !locationLoading && systemSettings && (
             <div className="text-center p-3 bg-muted/50 rounded-lg">
               <p className="text-sm text-muted-foreground">
                 📍 Defina o local de origem para começar
@@ -439,7 +551,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
             </div>
           )}
           
-          {origin && !destination && (
+          {origin && !destination && systemSettings && (
             <div className="text-center p-3 bg-muted/50 rounded-lg">
               <p className="text-sm text-muted-foreground">
                 🎯 Agora defina o destino da viagem

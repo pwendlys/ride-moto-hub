@@ -35,6 +35,7 @@ import {
   X,
   Circle
 } from "lucide-react";
+import { PricingInfo } from "@/components/PricingInfo";
 
 interface Profile {
   id: string;
@@ -1022,7 +1023,10 @@ const Dashboard = () => {
                           <div className="text-lg font-semibold">R$ {systemSettings.fixed_rate.toFixed(2)}</div>
                         </div>
                         <div className="col-span-full">
-                          <Button className="w-full">
+                          <Button 
+                            className="w-full"
+                            onClick={() => navigate('/admin/settings')}
+                          >
                             <Settings className="w-4 h-4 mr-2" />
                             Editar Configurações
                           </Button>
@@ -1203,6 +1207,13 @@ const Dashboard = () => {
                 </>
               )}
             </div>
+
+            {/* Driver Pricing Information */}
+            {profile.user_type === 'driver' && driverData?.status === 'approved' && (
+              <div className="mb-8">
+                <PricingInfo />
+              </div>
+            )}
 
             {/* Driver Ride Notifications */}
             {profile.user_type === 'driver' && rideNotifications.pendingRides.length > 0 && (

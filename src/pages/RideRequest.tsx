@@ -21,6 +21,14 @@ interface RouteInfo {
   distance: number
   duration: number
   price: number
+  driverEarnings: number
+  appFee: number
+  priceBreakdown: {
+    basePrice: number
+    distancePrice: number
+    minimumFare: number
+    pricingModel: string
+  }
 }
 
 export default function RideRequest() {
@@ -110,46 +118,86 @@ export default function RideRequest() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Route Details */}
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-3">
-                        <div className="w-3 h-3 bg-green-500 rounded-full mt-1.5"></div>
-                        <div>
-                          <Badge variant="secondary" className="mb-1">
-                            Origem
-                          </Badge>
-                          <p className="text-sm">{routeInfo.origin.address}</p>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-3">
+                          <div className="w-3 h-3 bg-green-500 rounded-full mt-1.5"></div>
+                          <div>
+                            <Badge variant="secondary" className="mb-1">
+                              Origem
+                            </Badge>
+                            <p className="text-sm">{routeInfo.origin.address}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <div className="w-3 h-3 bg-red-500 rounded-full mt-1.5"></div>
+                          <div>
+                            <Badge variant="secondary" className="mb-1">
+                              Destino
+                            </Badge>
+                            <p className="text-sm">{routeInfo.destination.address}</p>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-start gap-3">
-                        <div className="w-3 h-3 bg-red-500 rounded-full mt-1.5"></div>
-                        <div>
-                          <Badge variant="secondary" className="mb-1">
-                            Destino
-                          </Badge>
-                          <p className="text-sm">{routeInfo.destination.address}</p>
+
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="text-center p-3 bg-accent rounded-lg">
+                          <MapPin className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
+                          <p className="text-xs text-muted-foreground">Distância</p>
+                          <p className="font-semibold">{routeInfo.distance.toFixed(1)} km</p>
+                        </div>
+                        <div className="text-center p-3 bg-accent rounded-lg">
+                          <Clock className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
+                          <p className="text-xs text-muted-foreground">Tempo</p>
+                          <p className="font-semibold">{Math.round(routeInfo.duration)} min</p>
+                        </div>
+                        <div className="text-center p-3 bg-accent rounded-lg">
+                          <DollarSign className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
+                          <p className="text-xs text-muted-foreground">Preço Total</p>
+                          <p className="font-semibold">R$ {routeInfo.price.toFixed(2)}</p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="text-center p-3 bg-accent rounded-lg">
-                        <MapPin className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
-                        <p className="text-xs text-muted-foreground">Distância</p>
-                        <p className="font-semibold">{routeInfo.distance.toFixed(1)} km</p>
-                      </div>
-                      <div className="text-center p-3 bg-accent rounded-lg">
-                        <Clock className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
-                        <p className="text-xs text-muted-foreground">Tempo</p>
-                        <p className="font-semibold">{Math.round(routeInfo.duration)} min</p>
-                      </div>
-                      <div className="text-center p-3 bg-accent rounded-lg">
-                        <DollarSign className="h-5 w-5 mx-auto mb-1 text-muted-foreground" />
-                        <p className="text-xs text-muted-foreground">Preço</p>
-                        <p className="font-semibold">R$ {routeInfo.price.toFixed(2)}</p>
+                    {/* Price Breakdown */}
+                    <div className="mt-4 p-3 bg-muted/50 rounded-lg border">
+                      <h4 className="text-sm font-medium mb-2">Detalhamento do Preço</h4>
+                      <div className="space-y-1 text-xs">
+                        {routeInfo.priceBreakdown.pricingModel === 'per_km' ? (
+                          <>
+                            <div className="flex justify-between">
+                              <span>Taxa base:</span>
+                              <span>R$ {routeInfo.priceBreakdown.basePrice.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Distância ({routeInfo.distance.toFixed(1)} km):</span>
+                              <span>R$ {routeInfo.priceBreakdown.distancePrice.toFixed(2)}</span>
+                            </div>
+                            {routeInfo.price === routeInfo.priceBreakdown.minimumFare && (
+                              <div className="flex justify-between text-primary">
+                                <span>Tarifa mínima aplicada:</span>
+                                <span>R$ {routeInfo.priceBreakdown.minimumFare.toFixed(2)}</span>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="flex justify-between">
+                            <span>Preço fixo:</span>
+                            <span>R$ {routeInfo.priceBreakdown.basePrice.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="border-t pt-1 mt-2">
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>Taxa do app:</span>
+                            <span>R$ {routeInfo.appFee.toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>Motorista recebe:</span>
+                            <span>R$ {routeInfo.driverEarnings.toFixed(2)}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
                   {/* Action Button */}
                   <div className="pt-4">
