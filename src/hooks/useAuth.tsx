@@ -102,22 +102,48 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = async () => {
     try {
       console.log('🚪 Iniciando logout...');
-      const { error } = await supabase.auth.signOut();
       
-      if (error) {
-        console.error('❌ Erro durante logout:', error);
-        throw error;
+      // Verificar se existe sessão antes de tentar logout
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      
+      if (!currentSession) {
+        console.log('ℹ️ Nenhuma sessão ativa encontrada, apenas limpando estado local');
+      } else {
+        console.log('🔄 Sessão ativa encontrada, processando logout...');
+        const { error } = await supabase.auth.signOut();
+        
+        // Tratar AuthSessionMissingError como sucesso
+        if (error && error.message?.includes('Auth session missing')) {
+          console.log('ℹ️ Sessão já expirada, continuando com limpeza do estado');
+        } else if (error) {
+          console.error('❌ Erro durante logout:', error);
+          // Mesmo com erro, vamos limpar o estado local
+        }
       }
       
-      console.log('✅ Logout realizado com sucesso');
+      console.log('✅ Limpando estado local...');
       
-      // Limpar estado local
+      // Sempre limpar estado local, independentemente do resultado da API
       setSession(null);
       setUser(null);
       setLoading(false);
       
-    } catch (error) {
-      console.error('❌ Erro no signOut:', error);
+      console.log('✅ Logout concluído com sucesso');
+      
+    } catch (error: any) {
+      console.log('⚠️ Erro capturado, mas limpando estado local mesmo assim:', error);
+      
+      // Mesmo com erro, limpar estado local para garantir logout
+      setSession(null);
+      setUser(null);
+      setLoading(false);
+      
+      // Não re-throw do erro se for AuthSessionMissingError
+      if (error.message?.includes('Auth session missing')) {
+        console.log('ℹ️ Erro de sessão ausente tratado como sucesso');
+        return;
+      }
+      
       throw error;
     }
   };

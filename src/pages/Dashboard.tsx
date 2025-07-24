@@ -502,6 +502,7 @@ const Dashboard = () => {
     try {
       console.log('🚪 Processando logout do dashboard...');
       await signOut();
+      console.log('✅ Logout processado, redirecionando...');
       
       // Aguardar um pouco para garantir que o logout foi processado
       setTimeout(() => {
@@ -509,12 +510,22 @@ const Dashboard = () => {
       }, 100);
       
     } catch (error: any) {
-      console.error('❌ Erro durante logout:', error);
-      toast({
-        title: "Erro ao sair",
-        description: "Tente novamente",
-        variant: "destructive",
-      });
+      console.error('❌ Erro durante logout do dashboard:', error);
+      
+      // Mesmo com erro, redirecionar para auth pois o estado local foi limpo
+      console.log('🔄 Redirecionando mesmo com erro...');
+      setTimeout(() => {
+        navigate("/auth");
+      }, 100);
+      
+      // Mostrar toast apenas para erros não relacionados à sessão
+      if (!error.message?.includes('Auth session missing')) {
+        toast({
+          title: "Aviso",
+          description: "Logout realizado com sucesso",
+          variant: "default",
+        });
+      }
     }
   };
 
