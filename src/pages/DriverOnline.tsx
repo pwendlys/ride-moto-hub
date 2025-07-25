@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { GoogleMap } from '@/components/maps/GoogleMap';
 import { RideNotificationWithTimer } from '@/components/RideNotificationWithTimer';
+import { RideQueueStatus } from '@/components/RideQueueStatus';
 import { useToast } from '@/hooks/use-toast';
 import { 
   MapPin, 
@@ -173,6 +174,9 @@ const DriverOnline = () => {
           </CardContent>
         </Card>
 
+        {/* Connection Status */}
+        <RideQueueStatus />
+
         {/* Map */}
         <Card className="mb-6">
           <CardHeader>
@@ -247,10 +251,12 @@ const DriverOnline = () => {
                 {process.env.NODE_ENV === 'development' && (
                   <div className="mt-4 p-3 bg-muted rounded text-left text-xs">
                     <div><strong>Debug Info:</strong></div>
-                    <div>Listener Status: {rideQueue.isListening ? '✅ Ativo' : '❌ Inativo'}</div>
-                    <div>User ID: {user?.id}</div>
-                    <div>Online: {driverLocation.isOnline ? '✅' : '❌'}</div>
-                    <div>Coordinates: {currentLocation.coords ? `${currentLocation.coords.lat.toFixed(6)}, ${currentLocation.coords.lng.toFixed(6)}` : 'N/A'}</div>
+                    <div>🔔 Listener: {rideQueue.isListening ? '✅ Ativo' : '❌ Inativo'}</div>
+                    <div>👤 User ID: {user?.id}</div>
+                    <div>🌐 Online: {driverLocation.isOnline ? '✅' : '❌'}</div>
+                    <div>📍 Coords: {currentLocation.coords ? `${currentLocation.coords.lat.toFixed(6)}, ${currentLocation.coords.lng.toFixed(6)}` : 'N/A'}</div>
+                    <div>📨 Notifications: {rideQueue.activeNotifications.length}</div>
+                    <div>⏰ Timestamp: {new Date().toLocaleTimeString()}</div>
                   </div>
                 )}
               </CardContent>

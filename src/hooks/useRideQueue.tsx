@@ -30,33 +30,37 @@ export const useRideQueue = () => {
   const startListening = useCallback(async () => {
     if (isListening) return
 
-    setIsListening(true)
-    console.log('🔔 Starting ride notification listener')
+    try {
+      setIsListening(true)
+      console.log('🔔 Starting ride notification listener')
 
-    // Get current user ID first
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      console.error('❌ Erro ao obter usuário para listener:', userError)
-      setIsListening(false)
-      return
-    }
+      // Get current user ID first
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        console.error('❌ Erro ao obter usuário para listener:', userError)
+        setIsListening(false)
+        return
+      }
 
-    console.log(`🔔 Configurando listener para motorista: ${user.id}`)
+      console.log(`🔔 Configurando listener para motorista: ${user.id}`)
 
-    // Subscribe to ride notifications for current driver
-    const channel = supabase
-      .channel('ride-queue-notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'ride_notifications',
-          filter: `driver_id=eq.${user.id}`
-        },
-        async (payload) => {
-          const notification = payload.new as RideNotification
-          console.log('📨 New ride notification received:', notification)
+      // Verificar conectividade real-time
+      console.log('🔗 Testando conectividade real-time...')
+      
+      // Subscribe to ride notifications for current driver
+      const channel = supabase
+        .channel('ride-queue-notifications')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'ride_notifications',
+            filter: `driver_id=eq.${user.id}`
+          },
+          async (payload) => {
+            const notification = payload.new as RideNotification
+            console.log('📨 New ride notification received:', notification)
 
           // Verificar se a notificação é para este motorista
           if (notification.driver_id !== user.id) {
@@ -112,14 +116,44 @@ export const useRideQueue = () => {
           }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('📡 Status da conexão real-time:', status)
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Listener configurado e ativo')
+          toast({
+            title: "Conectado!",
+            description: "Aguardando corridas disponíveis...",
+            duration: 3000
+          })
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ Erro na conexão real-time')
+          toast({
+            title: "Erro de conexão",
+            description: "Tentando reconectar...",
+            variant: "destructive",
+            duration: 3000
+          })
+          // Tentar reconectar após 3 segundos
+          setTimeout(() => {
+            if (!isListening) startListening()
+          }, 3000)
+        }
+      })
 
-    console.log('✅ Listener configurado e ativo')
-
-    return () => {
-      console.log('🔕 Removendo listener')
-      supabase.removeChannel(channel)
+      // Cleanup function
+      return () => {
+        console.log('🔕 Removendo listener')
+        supabase.removeChannel(channel)
+        setIsListening(false)
+      }
+    } catch (error) {
+      console.error('❌ Erro ao inicializar listener:', error)
       setIsListening(false)
+      toast({
+        title: "Erro",
+        description: "Erro ao conectar ao sistema de notificações",
+        variant: "destructive"
+      })
     }
   }, [isListening, toast])
 
