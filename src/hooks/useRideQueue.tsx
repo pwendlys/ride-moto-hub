@@ -39,6 +39,11 @@ export const useRideQueue = () => {
       if (userError || !user) {
         console.error('❌ Erro ao obter usuário para listener:', userError)
         setIsListening(false)
+        toast({
+          title: "Erro de autenticação",
+          description: "Não foi possível identificar o motorista. Faça login novamente.",
+          variant: "destructive"
+        })
         return
       }
 

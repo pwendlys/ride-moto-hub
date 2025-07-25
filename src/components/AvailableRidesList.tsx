@@ -37,9 +37,16 @@ export const AvailableRidesList = ({
       <Card className="border-destructive/50">
         <CardContent className="p-6 text-center">
           <div className="text-destructive mb-2">⚠️ Sistema Offline</div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground mb-4">
             O sistema de notificações está desconectado. Verifique sua conexão com a internet.
           </p>
+          <Button 
+            variant="outline" 
+            onClick={() => window.location.reload()}
+            size="sm"
+          >
+            🔄 Reconectar Sistema
+          </Button>
         </CardContent>
       </Card>
     )

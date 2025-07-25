@@ -193,8 +193,19 @@ export const useRides = () => {
     distance_km?: number
   }) => {
     try {
-      const user = (await supabase.auth.getUser()).data.user
-      if (!user) throw new Error('User not authenticated')
+      // Verificar autenticação primeiro
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        console.error('❌ Erro de autenticação:', authError)
+        toast({
+          title: "Erro de autenticação",
+          description: "Por favor, faça login novamente",
+          variant: "destructive"
+        })
+        throw new Error('User not authenticated')
+      }
+
+      console.log('🔐 Usuário autenticado:', { id: user.id, email: user.email })
 
       const { data, error } = await supabase
         .from('rides')
@@ -214,37 +225,59 @@ export const useRides = () => {
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Erro ao criar corrida no banco:', error)
+        throw error
+      }
 
       console.log('🚗 Corrida criada com sucesso:', { id: data.id, status: data.status })
       
-      // Trigger ride queue manager
-      try {
-        console.log('🔔 Iniciando processo de notificação de motoristas...')
-        const { data: queueResponse, error: queueError } = await supabase.functions.invoke('ride-queue-manager', {
-          body: { rideId: data.id }
-        })
-        
-        if (queueError) {
-          console.error('❌ Erro ao disparar fila de corridas:', queueError)
-        } else {
-          console.log('✅ Fila de corridas disparada com sucesso:', queueResponse)
+      // Trigger ride queue manager com retry
+      let retryCount = 0
+      const maxRetries = 3
+      
+      while (retryCount < maxRetries) {
+        try {
+          console.log(`🔔 Tentativa ${retryCount + 1}: Iniciando processo de notificação de motoristas...`)
+          const { data: queueResponse, error: queueError } = await supabase.functions.invoke('ride-queue-manager', {
+            body: { rideId: data.id }
+          })
+          
+          if (queueError) {
+            console.error(`❌ Erro na tentativa ${retryCount + 1}:`, queueError)
+            retryCount++
+            if (retryCount >= maxRetries) {
+              throw queueError
+            }
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)) // Backoff
+          } else {
+            console.log('✅ Fila de corridas disparada com sucesso:', queueResponse)
+            break
+          }
+        } catch (queueError) {
+          console.error(`❌ Erro na tentativa ${retryCount + 1}:`, queueError)
+          retryCount++
+          if (retryCount >= maxRetries) {
+            console.error('❌ Falha após todas as tentativas. Corrida criada mas motoristas podem não receber notificação.')
+            // Não falhar a criação da corrida por causa disso
+            break
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount))
         }
-      } catch (queueError) {
-        console.error('❌ Erro ao chamar ride queue manager:', queueError)
       }
 
       toast({
-        title: "Corrida solicitada!",
-        description: "Sua corrida foi solicitada. Aguarde um motorista aceitar."
+        title: "✅ Corrida solicitada!",
+        description: "Sua corrida foi solicitada. Aguarde um motorista aceitar.",
+        duration: 5000
       })
 
       return data
     } catch (error) {
-      console.error('Error creating ride:', error)
+      console.error('❌ Erro geral ao criar corrida:', error)
       toast({
         title: "Erro",
-        description: "Erro ao solicitar corrida",
+        description: error instanceof Error ? error.message : "Erro ao solicitar corrida",
         variant: "destructive"
       })
       throw error
