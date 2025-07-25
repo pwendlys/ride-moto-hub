@@ -44,6 +44,9 @@ export const useRideQueue = () => {
 
       console.log(`🔔 Configurando listener para motorista: ${user.id}`)
 
+      // Buscar notificações pendentes existentes primeiro
+      await fetchPendingNotifications(user.id, setActiveNotifications)
+
       // Verificar conectividade real-time
       console.log('🔗 Testando conectividade real-time...')
       
@@ -253,13 +256,60 @@ export const useRideQueue = () => {
     return () => clearInterval(interval)
   }, [])
 
+  // Função para refresh manual das notificações
+  const refreshNotifications = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      await fetchPendingNotifications(user.id, setActiveNotifications)
+    }
+  }, [])
+
   return {
     activeNotifications,
     isListening,
     startListening,
     stopListening,
     acceptNotification,
-    declineNotification
+    declineNotification,
+    refreshNotifications
+  }
+}
+
+// Função para buscar notificações pendentes do motorista
+const fetchPendingNotifications = async (driverId: string, setActiveNotifications: React.Dispatch<React.SetStateAction<RideNotification[]>>) => {
+  try {
+    console.log('🔍 Buscando notificações pendentes existentes...')
+    
+    const { data: notifications, error } = await supabase
+      .from('ride_notifications')
+      .select('*')
+      .eq('driver_id', driverId)
+      .eq('status', 'pending')
+      .gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      console.error('❌ Erro ao buscar notificações pendentes:', error)
+      return
+    }
+
+    console.log(`📋 Encontradas ${notifications.length} notificações pendentes`)
+
+    // Enriquecer cada notificação com dados completos
+    const enrichedNotifications = await Promise.all(
+      notifications.map(notification => enrichNotificationData(notification as RideNotification))
+    )
+
+    // Filtrar notificações válidas e atualizar estado
+    const validNotifications = enrichedNotifications.filter(Boolean) as RideNotification[]
+    setActiveNotifications(validNotifications)
+
+    if (validNotifications.length > 0) {
+      console.log(`✅ ${validNotifications.length} notificações carregadas`)
+    }
+
+  } catch (error) {
+    console.error('❌ Erro ao buscar notificações pendentes:', error)
   }
 }
 

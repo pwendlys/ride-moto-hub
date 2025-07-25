@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { GoogleMap } from '@/components/maps/GoogleMap';
 import { RideNotificationWithTimer } from '@/components/RideNotificationWithTimer';
 import { RideQueueStatus } from '@/components/RideQueueStatus';
+import { AvailableRidesList } from '@/components/AvailableRidesList';
 import { useToast } from '@/hooks/use-toast';
 import { 
   MapPin, 
@@ -20,7 +21,8 @@ import {
   Car,
   ArrowLeft,
   Bell,
-  BellOff
+  BellOff,
+  RefreshCw
 } from 'lucide-react';
 
 const DriverOnline = () => {
@@ -76,6 +78,15 @@ const DriverOnline = () => {
 
   const handleDeclineRide = (notificationId: string) => {
     rideQueue.declineNotification(notificationId);
+  };
+
+  const handleRefreshRides = () => {
+    rideQueue.refreshNotifications();
+    toast({
+      title: "Atualizando...",
+      description: "Buscando corridas disponíveis",
+      duration: 2000
+    });
   };
 
   if (currentLocation.loading) {
@@ -213,52 +224,52 @@ const DriverOnline = () => {
           </CardContent>
         </Card>
 
-        {/* Pending Ride Notifications */}
+        {/* Available Rides Section */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold">Corridas Disponíveis</h2>
-            <div className="flex items-center gap-2">
-              {rideQueue.isListening ? (
-                <Bell className="w-5 h-5 text-success" />
-              ) : (
-                <BellOff className="w-5 h-5 text-muted-foreground" />
-              )}
-              <span className="text-sm text-muted-foreground">
-                {rideQueue.isListening ? 'Escutando' : 'Desconectado'}
-              </span>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefreshRides}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Atualizar
+              </Button>
+              <div className="flex items-center gap-2">
+                {rideQueue.isListening ? (
+                  <Bell className="w-5 h-5 text-success" />
+                ) : (
+                  <BellOff className="w-5 h-5 text-muted-foreground" />
+                )}
+                <span className="text-sm text-muted-foreground">
+                  {rideQueue.isListening ? 'Conectado' : 'Desconectado'}
+                </span>
+              </div>
             </div>
           </div>
 
-          {rideQueue.activeNotifications.length > 0 ? (
-            rideQueue.activeNotifications.map((notification) => (
-              <RideNotificationWithTimer
-                key={notification.id}
-                notification={notification}
-                onAccept={handleAcceptRide}
-                onDecline={handleDeclineRide}
-              />
-            ))
-          ) : (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <Car className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">
-                  Nenhuma corrida disponível no momento.
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Fique atento às notificações de novas solicitações!
-                </p>
-                {process.env.NODE_ENV === 'development' && (
-                  <div className="mt-4 p-3 bg-muted rounded text-left text-xs">
-                    <div><strong>Debug Info:</strong></div>
-                    <div>🔔 Listener: {rideQueue.isListening ? '✅ Ativo' : '❌ Inativo'}</div>
-                    <div>👤 User ID: {user?.id}</div>
-                    <div>🌐 Online: {driverLocation.isOnline ? '✅' : '❌'}</div>
-                    <div>📍 Coords: {currentLocation.coords ? `${currentLocation.coords.lat.toFixed(6)}, ${currentLocation.coords.lng.toFixed(6)}` : 'N/A'}</div>
-                    <div>📨 Notifications: {rideQueue.activeNotifications.length}</div>
-                    <div>⏰ Timestamp: {new Date().toLocaleTimeString()}</div>
-                  </div>
-                )}
+          <AvailableRidesList
+            notifications={rideQueue.activeNotifications}
+            onAccept={handleAcceptRide}
+            onDecline={handleDeclineRide}
+            isListening={rideQueue.isListening}
+          />
+
+          {process.env.NODE_ENV === 'development' && (
+            <Card className="border-dashed">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Debug Info</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xs space-y-1">
+                <div>🔔 Listener: {rideQueue.isListening ? '✅ Ativo' : '❌ Inativo'}</div>
+                <div>👤 User ID: {user?.id}</div>
+                <div>🌐 Online: {driverLocation.isOnline ? '✅' : '❌'}</div>
+                <div>📍 Coords: {currentLocation.coords ? `${currentLocation.coords.lat.toFixed(6)}, ${currentLocation.coords.lng.toFixed(6)}` : 'N/A'}</div>
+                <div>📨 Notifications: {rideQueue.activeNotifications.length}</div>
+                <div>⏰ Timestamp: {new Date().toLocaleTimeString()}</div>
               </CardContent>
             </Card>
           )}
