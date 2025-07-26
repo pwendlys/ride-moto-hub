@@ -82,15 +82,15 @@ serve(async (req) => {
 
     console.log('✅ User authenticated:', user.id)
 
-    // Get Google Maps API key from environment
-    const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
+    // Get Google Maps frontend API key from environment
+    const frontendApiKey = Deno.env.get('GOOGLE_MAPS_FRONTEND_API_KEY');
     
-    if (!apiKey) {
-      console.error('❌ GOOGLE_MAPS_API_KEY not found in environment variables');
+    if (!frontendApiKey) {
+      console.error('❌ GOOGLE_MAPS_FRONTEND_API_KEY not found in environment variables');
       return new Response(
         JSON.stringify({ 
-          error: 'Google Maps API key not configured',
-          details: 'Please configure GOOGLE_MAPS_API_KEY in Supabase secrets'
+          error: 'Google Maps frontend API key not configured',
+          details: 'Please configure GOOGLE_MAPS_FRONTEND_API_KEY in Supabase secrets'
         }),
         { 
           status: 500, 
@@ -99,9 +99,9 @@ serve(async (req) => {
       );
     }
 
-    console.log('✅ API key found, returning to client')
+    console.log('✅ Frontend API key found, returning to client')
     return new Response(
-      JSON.stringify({ apiKey }),
+      JSON.stringify({ apiKey: frontendApiKey }),
       { 
         status: 200, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

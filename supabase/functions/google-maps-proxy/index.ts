@@ -50,12 +50,12 @@ serve(async (req) => {
   console.log('✅ User authenticated:', user.id)
 
   try {
-    const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
+    const backendApiKey = Deno.env.get('GOOGLE_MAPS_BACKEND_API_KEY');
     
-    if (!apiKey) {
-      console.error('GOOGLE_MAPS_API_KEY not found in environment');
+    if (!backendApiKey) {
+      console.error('GOOGLE_MAPS_BACKEND_API_KEY not found in environment');
       return new Response(
-        JSON.stringify({ error: 'Google Maps API key not configured' }),
+        JSON.stringify({ error: 'Google Maps backend API key not configured' }),
         { 
           status: 500, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -72,7 +72,7 @@ serve(async (req) => {
       case 'places-autocomplete':
         googleMapsUrl = 'https://maps.googleapis.com/maps/api/place/autocomplete/json';
         queryParams = new URLSearchParams({
-          key: apiKey,
+          key: backendApiKey,
           input: params.input || '',
           components: 'country:br', // Restrict to Brazil
           language: 'pt-BR',
@@ -82,7 +82,7 @@ serve(async (req) => {
       case 'place-details':
         googleMapsUrl = 'https://maps.googleapis.com/maps/api/place/details/json';
         queryParams = new URLSearchParams({
-          key: apiKey,
+          key: backendApiKey,
           place_id: params.place_id || '',
           fields: 'geometry,formatted_address,name',
           language: 'pt-BR',
@@ -92,7 +92,7 @@ serve(async (req) => {
       case 'directions':
         googleMapsUrl = 'https://maps.googleapis.com/maps/api/directions/json';
         queryParams = new URLSearchParams({
-          key: apiKey,
+          key: backendApiKey,
           origin: params.origin || '',
           destination: params.destination || '',
           mode: 'driving',
@@ -104,7 +104,7 @@ serve(async (req) => {
       case 'reverse-geocode':
         googleMapsUrl = 'https://maps.googleapis.com/maps/api/geocode/json';
         queryParams = new URLSearchParams({
-          key: apiKey,
+          key: backendApiKey,
           latlng: `${params.lat},${params.lng}`,
           language: 'pt-BR',
           region: 'br',
