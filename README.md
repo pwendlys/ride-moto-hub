@@ -1,102 +1,73 @@
-# Plataforma MotoTaxi
+# Welcome to your Lovable project
 
-Sistema de corridas de mototáxi com separação clara entre frontend e backend.
-
-## Project Info
+## Project info
 
 **URL**: https://lovable.dev/projects/1026a553-0d8c-4206-a1ed-85532e7ba64d
 
-## Estrutura do Projeto
+## How can I edit this code?
 
-```
-mototaxi-platform/
-├── frontend/              # Aplicação React
-│   ├── src/
-│   │   ├── pages/         # Páginas da aplicação
-│   │   ├── components/    # Componentes React
-│   │   ├── hooks/         # Hooks customizados
-│   │   ├── services/      # Camada de serviços API
-│   │   └── integrations/  # Integrações (Supabase)
-│   └── public/            # Assets estáticos
-│
-├── backend/               # Backend Supabase
-│   └── supabase/
-│       ├── functions/     # Edge Functions
-│       ├── migrations/    # Migrações do banco
-│       └── config.toml    # Configuração Supabase
-│
-├── shared/                # Código compartilhado
-│   ├── types/             # Tipos TypeScript
-│   └── utils/             # Utilitários comuns
-│
-└── docs/                  # Documentação
-```
+There are several ways of editing your application.
 
-## Tecnologias
+**Use Lovable**
 
-### Frontend
-- **React 18** - Framework de interface
-- **TypeScript** - Tipagem estática
-- **Vite** - Build tool e dev server
-- **Tailwind CSS** - Framework CSS
-- **shadcn/ui** - Componentes UI
-- **React Router** - Roteamento
-- **TanStack Query** - Gerenciamento de estado servidor
-- **Google Maps API** - Integração de mapas
-
-### Backend
-- **Supabase** - Backend as a Service
-- **PostgreSQL** - Banco de dados
-- **Row Level Security** - Segurança de dados
-- **Edge Functions** - Serverless functions
-- **Realtime** - Atualizações em tempo real
-
-## Instalação e Execução
-
-### Configuração Inicial
-```bash
-# Instalar dependências no frontend
-cd frontend && npm install
-
-# Instalar dependências no backend
-cd backend && npm install
-```
-
-### Desenvolvimento
-```bash
-# Executar frontend
-cd frontend && npm run dev          # localhost:8080
-
-# Executar backend
-cd backend && npm run start         # Supabase local
-```
-
-### Build e Deploy
-```bash
-# Build do frontend
-cd frontend && npm run build
-
-# Deploy das Edge Functions
-cd backend && npm run functions:deploy
-```
-
-## How to Edit This Code
-
-**Use Lovable** (Recommended)
 Simply visit the [Lovable Project](https://lovable.dev/projects/1026a553-0d8c-4206-a1ed-85532e7ba64d) and start prompting.
 
+Changes made via Lovable will be committed automatically to this repo.
+
 **Use your preferred IDE**
-Clone this repo and push changes. The only requirement is having Node.js & npm installed.
+
+If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+
+The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+
+Follow these steps:
 
 ```sh
+# Step 1: Clone the repository using the project's Git URL.
 git clone <YOUR_GIT_URL>
+
+# Step 2: Navigate to the project directory.
 cd <YOUR_PROJECT_NAME>
-cd frontend && npm install  # Install frontend dependencies
-npm run dev                 # Start development server
+
+# Step 3: Install the necessary dependencies.
+npm i
+
+# Step 4: Start the development server with auto-reloading and an instant preview.
+npm run dev
 ```
 
-## Deploy
+**Edit a file directly in GitHub**
 
-Simply open [Lovable](https://lovable.dev/projects/1026a553-0d8c-4206-a1ed-85532e7ba64d) and click on Share → Publish.
+- Navigate to the desired file(s).
+- Click the "Edit" button (pencil icon) at the top right of the file view.
+- Make your changes and commit the changes.
 
-For more details, see [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+**Use GitHub Codespaces**
+
+- Navigate to the main page of your repository.
+- Click on the "Code" button (green button) near the top right.
+- Select the "Codespaces" tab.
+- Click on "New codespace" to launch a new Codespace environment.
+- Edit files directly within the Codespace and commit and push your changes once you're done.
+
+## What technologies are used for this project?
+
+This project is built with:
+
+- Vite
+- TypeScript
+- React
+- shadcn-ui
+- Tailwind CSS
+
+## How can I deploy this project?
+
+Simply open [Lovable](https://lovable.dev/projects/1026a553-0d8c-4206-a1ed-85532e7ba64d) and click on Share -> Publish.
+
+## Can I connect a custom domain to my Lovable project?
+
+Yes, you can!
+
+To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+
+Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
