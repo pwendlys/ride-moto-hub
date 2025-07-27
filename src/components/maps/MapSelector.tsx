@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { MapPin, Navigation, Target, Clock, DollarSign, Info } from 'lucide-react'
+import { MapPin, Navigation, Target, Clock, DollarSign, Info, AlertCircle } from 'lucide-react'
 import { GoogleMap } from './GoogleMap'
 import { LocationCoords, useGeolocation } from '@/hooks/useGeolocation'
 import { supabase } from '@/integrations/supabase/client'
@@ -55,6 +56,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
   const [routeInfo, setRouteInfo] = useState<any>(null)
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false)
   const [isGettingAddress, setIsGettingAddress] = useState(false)
+  const [apiStatus, setApiStatus] = useState<'unknown' | 'working' | 'error'>('unknown')
 
   // Function to get address from coordinates using reverse geocoding
   const getAddressFromCoords = async (coords: LocationCoords): Promise<string> => {
@@ -107,7 +109,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
     }
   }, [currentLocation, origin, onLocationSelect, locationLoading, user])
 
-  // Debounced search function with detailed logging
+  // Debounced search function with enhanced error handling
   const searchPlaces = useCallback(async (query: string, type: 'origin' | 'destination') => {
     if (!query.trim() || !user) {
       if (type === 'origin') setOriginResults([])
@@ -135,7 +137,15 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
           type,
           timestamp: new Date().toISOString()
         })
-        toast.error(`Erro na busca: ${error.message}`)
+        
+        setApiStatus('error')
+        toast.error(`Erro na busca: ${error.message}`, {
+          duration: 6000,
+          action: {
+            label: 'Ver solução',
+            onClick: () => toast.info('Verifique se as APIs estão habilitadas no Google Cloud Console')
+          }
+        })
         return
       }
 
@@ -149,10 +159,16 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
           type
         })
         
+        setApiStatus('error')
+        
         // Show specific error based on type
         if (data.requiredApis && data.requiredApis.length > 0) {
           toast.error(`Habilite estas APIs no Google Cloud Console: ${data.requiredApis.join(', ')}`, {
-            duration: 10000
+            duration: 10000,
+            action: {
+              label: 'Abrir Console',
+              onClick: () => window.open('https://console.cloud.google.com/apis/library', '_blank')
+            }
           })
         } else {
           toast.error(`Erro: ${data.details || data.error}`)
@@ -162,6 +178,8 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
 
       if (data?.predictions) {
         console.log(`✅ Found ${data.predictions.length} places for "${query}"`)
+        setApiStatus('working')
+        
         if (type === 'origin') {
           setOriginResults(data.predictions)
         } else {
@@ -181,6 +199,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
         timestamp: new Date().toISOString()
       })
       
+      setApiStatus('error')
       toast.error('Erro interno na busca de endereços')
     } finally {
       if (type === 'origin') setIsSearchingOrigin(false)
@@ -281,6 +300,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
       }
 
       setMapCenter(location.coords)
+      setApiStatus('working')
     } catch (error) {
       console.error('❌ Critical error getting place details:', {
         error: error.message,
@@ -309,6 +329,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
       if (error) {
         console.error('Erro no cálculo de rota:', error)
         toast.error('Erro ao calcular rota')
+        setApiStatus('error')
         return
       }
 
@@ -377,11 +398,18 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
         }
 
         setRouteInfo(routeData)
+        setApiStatus('working')
         onRouteCalculated?.(routeData)
+        
+        toast.success('Rota calculada com sucesso!')
+      } else {
+        toast.error('Nenhuma rota encontrada')
+        setApiStatus('error')
       }
     } catch (error) {
       console.error('Erro no cálculo de rota:', error)
       toast.error('Erro ao calcular rota')
+      setApiStatus('error')
     } finally {
       setIsCalculatingRoute(false)
     }
@@ -410,6 +438,8 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
       setOriginResults([])
       setMapCenter(currentLocation)
       onLocationSelect?.('origin', currentLocationData)
+      
+      toast.success('Localização atual definida como origem')
     } finally {
       setIsGettingAddress(false)
     }
@@ -468,9 +498,32 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
           <CardTitle className="flex items-center gap-2">
             <MapPin className="h-5 w-5" />
             Definir Trajeto
+            {apiStatus === 'working' && (
+              <Badge variant="default" className="ml-2">
+                APIs Funcionando
+              </Badge>
+            )}
+            {apiStatus === 'error' && (
+              <Badge variant="destructive" className="ml-2">
+                Erro nas APIs
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* API Status Alert */}
+          {apiStatus === 'error' && (
+            <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <AlertCircle className="h-4 w-4 text-destructive" />
+              <div className="flex-1 text-sm">
+                <p className="font-medium text-destructive">Problema com as APIs do Google Maps</p>
+                <p className="text-destructive/80">
+                  Verifique se as APIs estão habilitadas no Google Cloud Console
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Origin Field */}
           <div className="space-y-2">
             <label className="text-sm font-medium text-foreground">
@@ -485,6 +538,11 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
                   disabled={locationLoading}
                   className="pr-10"
                 />
+                {isSearchingOrigin && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                  </div>
+                )}
               </div>
               <Button
                 variant="outline"
@@ -508,7 +566,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
                   {originResults.map((place, index) => (
                     <button
                       key={index}
-                      className="w-full p-3 text-left hover:bg-accent border-b border-border last:border-b-0"
+                      className="w-full p-3 text-left hover:bg-accent border-b border-border last:border-b-0 transition-colors"
                       onClick={() => selectPlace(place, 'origin')}
                     >
                       <div className="font-medium text-sm">{place.structured_formatting.main_text}</div>
@@ -533,6 +591,11 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
                 value={destinationQuery}
                 onChange={(e) => setDestinationQuery(e.target.value)}
               />
+              {isSearchingDestination && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                </div>
+              )}
             </div>
             
             {/* Destination Autocomplete Results */}
@@ -542,7 +605,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
                   {destinationResults.map((place, index) => (
                     <button
                       key={index}
-                      className="w-full p-3 text-left hover:bg-accent border-b border-border last:border-b-0"
+                      className="w-full p-3 text-left hover:bg-accent border-b border-border last:border-b-0 transition-colors"
                       onClick={() => selectPlace(place, 'destination')}
                     >
                       <div className="font-medium text-sm">{place.structured_formatting.main_text}</div>
@@ -562,7 +625,10 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-sm">Resumo da Viagem</h3>
                 {isCalculatingRoute && (
-                  <div className="text-xs text-muted-foreground">Calculando...</div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary" />
+                    Calculando...
+                  </div>
                 )}
               </div>
               
@@ -701,6 +767,10 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
                 }
               : undefined
           }
+          onMapLoad={(map) => {
+            console.log('✅ Map loaded successfully in MapSelector')
+            toast.success('Mapa carregado com sucesso!')
+          }}
         />
       </div>
     </div>

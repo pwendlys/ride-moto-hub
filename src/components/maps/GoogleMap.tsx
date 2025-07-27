@@ -4,6 +4,7 @@ import { Loader } from '@googlemaps/js-api-loader'
 import { LocationCoords } from '@/hooks/useGeolocation'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
+import { toast } from 'sonner'
 
 interface GoogleMapProps {
   center?: LocationCoords
@@ -44,6 +45,7 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
   const [directionsRenderer, setDirectionsRenderer] = useState<google.maps.DirectionsRenderer | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [apiKeyStatus, setApiKeyStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const markersRef = useRef<google.maps.Marker[]>([])
   const isInitializingRef = useRef(false)
 
@@ -53,6 +55,8 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
     isInitializingRef.current = true
     
     try {
+      console.log('🗺️ Initializing Google Maps with center:', center)
+      
       const mapInstance = new google.maps.Map(mapRef.current, {
         center,
         zoom,
@@ -63,6 +67,10 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
             stylers: [{ visibility: 'off' }]
           }
         ],
+        mapTypeControl: true,
+        fullscreenControl: true,
+        streetViewControl: true,
+        zoomControl: true,
       })
 
       const directionsServiceInstance = new google.maps.DirectionsService()
@@ -71,6 +79,7 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
         polylineOptions: {
           strokeColor: showRoute?.color || '#4285F4',
           strokeWeight: 4,
+          strokeOpacity: 0.8,
         },
       })
 
@@ -81,6 +90,9 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
       setDirectionsRenderer(directionsRendererInstance)
       setIsLoading(false)
       setError(null)
+      setApiKeyStatus('success')
+      
+      console.log('✅ Google Maps initialized successfully')
       
       if (onMapLoad) {
         onMapLoad(mapInstance)
@@ -98,10 +110,17 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
           }
         })
       }
+
+      // Add zoom change listener for better UX
+      mapInstance.addListener('zoom_changed', () => {
+        console.log('🔍 Map zoom changed to:', mapInstance.getZoom())
+      })
+
     } catch (err) {
-      console.error('Error initializing map:', err)
+      console.error('❌ Error initializing map:', err)
       setError('Erro ao inicializar o mapa')
       setIsLoading(false)
+      setApiKeyStatus('error')
     } finally {
       isInitializingRef.current = false
     }
@@ -111,31 +130,34 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
     let isMounted = true
     let retryCount = 0
     const maxRetries = 3
+    const retryDelay = 2000
 
     const loadGoogleMaps = async () => {
       if (!isMounted) return
       
       try {
-        console.log('🗺️ Iniciando carregamento do Google Maps...')
+        console.log('🚀 Starting Google Maps loading process...')
         setIsLoading(true)
         setError(null)
+        setApiKeyStatus('loading')
 
         // Check if Google Maps is already loaded
         if (window.google?.maps) {
-          console.log('✅ Google Maps já carregado, inicializando...')
+          console.log('✅ Google Maps already loaded, initializing...')
           initializeMap()
           return
         }
 
         // Check if user is authenticated
         if (!user) {
-          console.log('❌ Usuário não autenticado, aguardando...')
+          console.log('❌ User not authenticated, waiting...')
           setError('Usuário não autenticado')
           setIsLoading(false)
+          setApiKeyStatus('error')
           return
         }
 
-        console.log('📡 Buscando API key via edge function...')
+        console.log('🔑 Fetching API key via edge function...')
         
         // Get API key from edge function with improved error handling
         let { data: keyData, error: keyError } = await supabase.functions.invoke('get-maps-key')
@@ -143,12 +165,11 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
         if (!isMounted) return
         
         if (keyError) {
-          console.error('❌ Erro na edge function:', keyError)
+          console.error('❌ Error in edge function:', keyError)
           
           // Check if it's an authentication error
           if (keyError.message?.includes('401') || keyError.message?.includes('Unauthorized')) {
-            // Try to refresh the session
-            console.log('🔄 Tentando renovar sessão...')
+            console.log('🔄 Attempting to refresh session...')
             const { error: refreshError } = await supabase.auth.refreshSession()
             
             if (refreshError) {
@@ -158,7 +179,7 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
             if (!isMounted) return
             
             // Retry with refreshed session
-            console.log('🔄 Tentando novamente com sessão renovada...')
+            console.log('🔄 Retrying with refreshed session...')
             const retryResult = await supabase.functions.invoke('get-maps-key')
             
             if (retryResult.error) {
@@ -169,42 +190,65 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
               throw new Error('Chave da API do Google Maps não encontrada após renovação da sessão')
             }
             
-            // Use the retry data
             keyData = retryResult.data
           } else {
             throw new Error(`Erro ao obter chave da API: ${keyError.message}`)
           }
         } else if (!keyData?.apiKey) {
-          console.error('❌ API key não encontrada na resposta:', keyData)
+          console.error('❌ API key not found in response:', keyData)
           throw new Error('Chave da API do Google Maps não encontrada')
         }
 
-        console.log('🔑 API key obtida com sucesso, carregando Google Maps...')
+        console.log('🔑 API key obtained successfully, loading Google Maps...')
+        
+        // Validate API key format
+        if (!keyData.apiKey.startsWith('AIza')) {
+          console.warn('⚠️ API key format may be incorrect')
+          toast.warning('Formato da chave API pode estar incorreto')
+        }
 
         const loader = new Loader({
           apiKey: keyData.apiKey,
           version: 'weekly',
           libraries: ['places', 'geometry'],
+          language: 'pt-BR',
+          region: 'BR',
         })
 
         await loader.load()
         
         if (!isMounted) return
         
-        console.log('✅ Google Maps carregado com sucesso!')
+        console.log('✅ Google Maps loaded successfully!')
+        toast.success('Google Maps carregado com sucesso!')
         initializeMap()
+        
       } catch (error) {
         if (!isMounted) return
         
-        console.error('💥 Erro ao carregar Google Maps:', error)
+        console.error('💥 Error loading Google Maps:', error)
+        setApiKeyStatus('error')
         
         if (retryCount < maxRetries) {
           retryCount++
-          console.log(`🔄 Tentativa ${retryCount}/${maxRetries} em 2 segundos...`)
-          setTimeout(() => loadGoogleMaps(), 2000)
+          console.log(`🔄 Retry attempt ${retryCount}/${maxRetries} in ${retryDelay/1000} seconds...`)
+          setTimeout(() => loadGoogleMaps(), retryDelay)
         } else {
-          setError(`Erro ao carregar o Google Maps: ${error instanceof Error ? error.message : 'Erro desconhecido'}`)
+          const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido'
+          setError(`Erro ao carregar o Google Maps: ${errorMessage}`)
           setIsLoading(false)
+          
+          // Show helpful toast message
+          toast.error(`Erro no Google Maps: ${errorMessage}`, {
+            duration: 8000,
+            action: {
+              label: 'Tentar novamente',
+              onClick: () => {
+                retryCount = 0
+                loadGoogleMaps()
+              }
+            }
+          })
         }
       }
     }
@@ -231,6 +275,7 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
         map,
         title: markerData.title,
         icon: markerData.icon,
+        animation: google.maps.Animation.DROP,
       })
 
       if (markerData.onClick) {
@@ -249,17 +294,29 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
   useEffect(() => {
     if (!map || !directionsService || !directionsRenderer || !showRoute) return
 
+    console.log('🛣️ Calculating route:', showRoute)
+
     directionsService.route(
       {
         origin: showRoute.origin,
         destination: showRoute.destination,
         travelMode: google.maps.TravelMode.DRIVING,
+        unitSystem: google.maps.UnitSystem.METRIC,
+        region: 'BR',
       },
       (result, status) => {
         if (status === 'OK' && result) {
+          console.log('✅ Route calculated successfully')
           directionsRenderer.setDirections(result)
+          
+          // Fit map to show entire route
+          const bounds = new google.maps.LatLngBounds()
+          bounds.extend(showRoute.origin)
+          bounds.extend(showRoute.destination)
+          map.fitBounds(bounds)
         } else {
-          console.error('Erro ao calcular rota:', status)
+          console.error('❌ Error calculating route:', status)
+          toast.error(`Erro ao calcular rota: ${status}`)
         }
       }
     )
@@ -279,24 +336,33 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
         className={`rounded-lg border border-border flex items-center justify-center bg-muted ${className}`}
       >
         <div className="text-center p-4 max-w-md">
-          <p className="text-destructive font-medium mb-2">❌ Erro ao carregar o mapa</p>
-          <p className="text-sm text-muted-foreground mb-3 bg-background p-2 rounded text-left">
+          <div className="mb-4">
+            <div className="text-4xl mb-2">🗺️</div>
+            <p className="text-destructive font-medium mb-2">Erro ao carregar o mapa</p>
+          </div>
+          <div className="text-sm text-muted-foreground mb-4 bg-background p-3 rounded text-left">
             {error}
-          </p>
-          <div className="space-y-2 text-xs text-muted-foreground">
-            <p>
-              💡 <strong>Possíveis soluções:</strong>
-            </p>
-            <ul className="text-left space-y-1">
-              <li>• Verifique se você está logado no sistema</li>
-              <li>• Certifique-se de que a API key está configurada</li>
-              <li>• Abra o DevTools (F12) para ver logs detalhados</li>
-              <li>• Verifique se as APIs estão habilitadas no Google Cloud</li>
-            </ul>
+          </div>
+          <div className="space-y-3 text-xs text-muted-foreground">
+            <div>
+              <p className="font-medium mb-1">💡 Possíveis soluções:</p>
+              <ul className="text-left space-y-1">
+                <li>• Verifique se você está logado no sistema</li>
+                <li>• Certifique-se de que a chave API está configurada</li>
+                <li>• Verifique se as APIs necessárias estão habilitadas</li>
+                <li>• Abra o DevTools (F12) para logs detalhados</li>
+              </ul>
+            </div>
+            {apiKeyStatus === 'error' && (
+              <div className="p-2 bg-destructive/10 border border-destructive/20 rounded">
+                <p className="text-destructive font-medium">⚠️ Problema com chave da API</p>
+                <p className="text-xs">Verifique se a GOOGLE_MAPS_FRONTEND_API_KEY está configurada no Supabase</p>
+              </div>
+            )}
           </div>
           <button 
             onClick={() => window.location.reload()} 
-            className="mt-3 px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90"
+            className="mt-4 px-4 py-2 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
           >
             🔄 Recarregar Página
           </button>
@@ -312,8 +378,12 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
         className={`rounded-lg border border-border flex items-center justify-center bg-muted ${className}`}
       >
         <div className="text-center p-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-          <p className="text-muted-foreground">Carregando mapa...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground font-medium">Carregando Google Maps...</p>
+          <div className="mt-2 text-xs text-muted-foreground">
+            {apiKeyStatus === 'loading' && '🔑 Obtendo chave da API...'}
+            {apiKeyStatus === 'success' && '🗺️ Inicializando mapa...'}
+          </div>
         </div>
       </div>
     )
