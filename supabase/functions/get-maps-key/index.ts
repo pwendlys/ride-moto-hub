@@ -90,15 +90,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           error: 'Google Maps frontend API key not configured',
-          details: 'Please configure GOOGLE_MAPS_FRONTEND_API_KEY in Supabase secrets',
-          troubleshooting: {
-            steps: [
-              'Go to Supabase Dashboard → Settings → Functions',
-              'Add GOOGLE_MAPS_FRONTEND_API_KEY secret',
-              'Ensure the key has Maps JavaScript API enabled',
-              'Configure domain restrictions for *.lovableproject.com'
-            ]
-          }
+          details: 'Please configure GOOGLE_MAPS_FRONTEND_API_KEY in Supabase secrets'
         }),
         { 
           status: 500, 
@@ -107,19 +99,9 @@ serve(async (req) => {
       );
     }
 
-    console.log('✅ Frontend API key found and validated, returning to client')
-    
-    // Validate that the key is properly formatted (basic check)
-    if (!frontendApiKey.startsWith('AIza')) {
-      console.warn('⚠️ API key does not start with expected prefix')
-    }
-
+    console.log('✅ Frontend API key found, returning to client')
     return new Response(
-      JSON.stringify({ 
-        apiKey: frontendApiKey,
-        timestamp: new Date().toISOString(),
-        status: 'success'
-      }),
+      JSON.stringify({ apiKey: frontendApiKey }),
       { 
         status: 200, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -131,12 +113,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: 'Internal server error',
-        details: error.message,
-        timestamp: new Date().toISOString(),
-        troubleshooting: {
-          message: 'Check function logs for detailed error information',
-          contact: 'Review edge function logs in Supabase Dashboard'
-        }
+        details: error.message
       }),
       { 
         status: 500, 
