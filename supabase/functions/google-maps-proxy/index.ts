@@ -53,15 +53,21 @@ serve(async (req) => {
     const backendApiKey = Deno.env.get('GOOGLE_MAPS_BACKEND_API_KEY');
     
     if (!backendApiKey) {
-      console.error('GOOGLE_MAPS_BACKEND_API_KEY not found in environment');
+      console.error('❌ GOOGLE_MAPS_BACKEND_API_KEY not found in environment');
       return new Response(
-        JSON.stringify({ error: 'Google Maps backend API key not configured' }),
+        JSON.stringify({ 
+          error: 'Google Maps backend API key not configured',
+          timestamp: new Date().toISOString(),
+          action: 'check_environment_variables'
+        }),
         { 
           status: 500, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
     }
+
+    console.log('✅ Backend API key found, processing action...')
 
     const { action, ...params } = await req.json();
 
@@ -122,17 +128,76 @@ serve(async (req) => {
     }
 
     const fullUrl = `${googleMapsUrl}?${queryParams.toString()}`;
-    console.log(`Making request to: ${action} - ${fullUrl}`);
+    console.log(`🔄 Making ${action} request...`);
+    console.log(`📍 URL (without key): ${googleMapsUrl}?${queryParams.toString().replace(/key=[^&]+/, 'key=***')}`);
 
     const response = await fetch(fullUrl);
-    const data = await response.json();
-
-    if (data.status === 'REQUEST_DENIED' || data.status === 'INVALID_REQUEST') {
-      console.error('Google Maps API error:', data);
+    
+    if (!response.ok) {
+      console.error(`❌ HTTP Error ${response.status}: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`❌ Response body: ${errorText}`);
+      
       return new Response(
         JSON.stringify({ 
-          error: 'Google Maps API error', 
-          details: data.error_message || data.status 
+          error: `HTTP ${response.status}: ${response.statusText}`,
+          details: errorText,
+          action: action,
+          timestamp: new Date().toISOString()
+        }),
+        { 
+          status: response.status, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    const data = await response.json();
+    console.log(`📊 Response status: ${data.status || 'unknown'}`);
+
+    if (data.status === 'REQUEST_DENIED') {
+      console.error('❌ Google Maps API - REQUEST DENIED:', {
+        status: data.status,
+        error_message: data.error_message,
+        action: action
+      });
+      
+      return new Response(
+        JSON.stringify({ 
+          error: 'Google Maps API access denied', 
+          details: data.error_message || 'API key may be invalid or missing permissions',
+          status: data.status,
+          action: action,
+          timestamp: new Date().toISOString(),
+          suggestions: [
+            'Verify API key is correct',
+            'Check if required APIs are enabled',
+            'Verify domain restrictions',
+            'Check API quotas and billing'
+          ]
+        }),
+        { 
+          status: 403, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    if (data.status === 'INVALID_REQUEST' || data.status === 'ZERO_RESULTS') {
+      console.error('❌ Google Maps API - Invalid request:', {
+        status: data.status,
+        error_message: data.error_message,
+        action: action,
+        params: Object.fromEntries(queryParams)
+      });
+      
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid request to Google Maps API', 
+          details: data.error_message || data.status,
+          status: data.status,
+          action: action,
+          timestamp: new Date().toISOString()
         }),
         { 
           status: 400, 
@@ -140,6 +205,12 @@ serve(async (req) => {
         }
       );
     }
+
+    if (data.status && data.status !== 'OK') {
+      console.warn(`⚠️ Google Maps API warning - Status: ${data.status}`, data);
+    }
+
+    console.log(`✅ ${action} completed successfully`)
 
     return new Response(
       JSON.stringify(data),
@@ -150,9 +221,21 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in Google Maps proxy:', error);
+    console.error('❌ Critical error in Google Maps proxy:', {
+      message: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString(),
+      userAgent: req.headers.get('user-agent'),
+      action: 'unknown'
+    });
+    
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: error.message }),
+      JSON.stringify({ 
+        error: 'Internal server error', 
+        details: error.message,
+        timestamp: new Date().toISOString(),
+        requestId: crypto.randomUUID()
+      }),
       { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

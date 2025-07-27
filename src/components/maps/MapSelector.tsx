@@ -107,13 +107,15 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
     }
   }, [currentLocation, origin, onLocationSelect, locationLoading, user])
 
-  // Debounced search function
+  // Debounced search function with detailed logging
   const searchPlaces = useCallback(async (query: string, type: 'origin' | 'destination') => {
     if (!query.trim() || !user) {
       if (type === 'origin') setOriginResults([])
       else setDestinationResults([])
       return
     }
+
+    console.log(`🔍 Searching places for: "${query}" (${type})`)
 
     if (type === 'origin') setIsSearchingOrigin(true)
     else setIsSearchingDestination(true)
@@ -127,19 +129,51 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
       })
 
       if (error) {
-        console.error('Erro na busca:', error)
-        toast.error('Erro ao buscar endereços')
+        console.error('❌ Error searching places:', {
+          error,
+          query,
+          type,
+          timestamp: new Date().toISOString()
+        })
+        toast.error(`Erro na busca: ${error.message}`)
         return
       }
 
-      if (type === 'origin') {
-        setOriginResults(data?.predictions || [])
+      if (data?.error) {
+        console.error('❌ Google Maps API error:', {
+          error: data.error,
+          details: data.details,
+          suggestions: data.suggestions,
+          query,
+          type
+        })
+        
+        toast.error(`Erro do Google Maps: ${data.details || data.error}`)
+        return
+      }
+
+      if (data?.predictions) {
+        console.log(`✅ Found ${data.predictions.length} places for "${query}"`)
+        if (type === 'origin') {
+          setOriginResults(data.predictions)
+        } else {
+          setDestinationResults(data.predictions)
+        }
       } else {
-        setDestinationResults(data?.predictions || [])
+        console.warn(`⚠️ No predictions returned for "${query}"`)
+        if (type === 'origin') setOriginResults([])
+        else setDestinationResults([])
       }
     } catch (error) {
-      console.error('Erro na busca:', error)
-      toast.error('Erro ao buscar endereços')
+      console.error('❌ Critical error searching places:', {
+        error: error.message,
+        stack: error.stack,
+        query,
+        type,
+        timestamp: new Date().toISOString()
+      })
+      
+      toast.error('Erro interno na busca de endereços')
     } finally {
       if (type === 'origin') setIsSearchingOrigin(false)
       else setIsSearchingDestination(false)
@@ -168,6 +202,8 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
   const selectPlace = async (place: any, type: 'origin' | 'destination') => {
     if (!user) return
     
+    console.log(`📍 Selecting place: ${place.description} (${type})`)
+    
     try {
       const { data, error } = await supabase.functions.invoke('google-maps-proxy', {
         body: {
@@ -177,8 +213,35 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
       })
 
       if (error) {
-        console.error('Erro ao obter detalhes do local:', error)
-        toast.error('Erro ao selecionar local')
+        console.error('❌ Error getting place details:', {
+          error,
+          place_id: place.place_id,
+          type,
+          timestamp: new Date().toISOString()
+        })
+        toast.error(`Erro ao selecionar local: ${error.message}`)
+        return
+      }
+
+      if (data?.error) {
+        console.error('❌ Google Maps API error on place details:', {
+          error: data.error,
+          details: data.details,
+          place_id: place.place_id,
+          type
+        })
+        
+        toast.error(`Erro do Google Maps: ${data.details || data.error}`)
+        return
+      }
+
+      if (!data?.result?.geometry?.location) {
+        console.error('❌ Invalid place details response:', {
+          data,
+          place_id: place.place_id,
+          type
+        })
+        toast.error('Dados inválidos do local selecionado')
         return
       }
 
@@ -190,6 +253,12 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
         address: data.result.formatted_address,
         type: 'searched',
       }
+
+      console.log(`✅ Place selected successfully:`, {
+        address: location.address,
+        coords: location.coords,
+        type
+      })
 
       if (type === 'origin') {
         setOrigin(location)
@@ -205,8 +274,14 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
 
       setMapCenter(location.coords)
     } catch (error) {
-      console.error('Erro ao obter detalhes do local:', error)
-      toast.error('Erro ao selecionar local')
+      console.error('❌ Critical error getting place details:', {
+        error: error.message,
+        stack: error.stack,
+        place_id: place.place_id,
+        type,
+        timestamp: new Date().toISOString()
+      })
+      toast.error('Erro interno ao selecionar local')
     }
   }
 
