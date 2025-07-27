@@ -156,10 +156,12 @@ serve(async (req) => {
     console.log(`📊 Response status: ${data.status || 'unknown'}`);
 
     if (data.status === 'REQUEST_DENIED') {
+      const requiredApis = getRequiredApis(action);
       console.error('❌ Google Maps API - REQUEST DENIED:', {
         status: data.status,
         error_message: data.error_message,
-        action: action
+        action: action,
+        requiredApis: requiredApis
       });
       
       return new Response(
@@ -168,12 +170,13 @@ serve(async (req) => {
           details: data.error_message || 'API key may be invalid or missing permissions',
           status: data.status,
           action: action,
+          requiredApis: requiredApis,
           timestamp: new Date().toISOString(),
           suggestions: [
-            'Verify API key is correct',
-            'Check if required APIs are enabled',
-            'Verify domain restrictions',
-            'Check API quotas and billing'
+            `Enable these APIs: ${requiredApis.join(', ')}`,
+            'Check domain restrictions (Edge Functions need IP or no restrictions)',
+            'Verify API quotas and billing are active',
+            'Check if key is restricted to wrong referrers'
           ]
         }),
         { 
@@ -243,3 +246,15 @@ serve(async (req) => {
     );
   }
 })
+
+// Helper function to identify required APIs based on action
+function getRequiredApis(action: string): string[] {
+  const apiMap: Record<string, string[]> = {
+    'places-autocomplete': ['Places API (New)'],
+    'place-details': ['Places API (New)'],
+    'directions': ['Directions API'],
+    'reverse-geocode': ['Geocoding API']
+  };
+  
+  return apiMap[action] || ['Unknown API'];
+}

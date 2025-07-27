@@ -144,11 +144,19 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
           error: data.error,
           details: data.details,
           suggestions: data.suggestions,
+          requiredApis: data.requiredApis,
           query,
           type
         })
         
-        toast.error(`Erro do Google Maps: ${data.details || data.error}`)
+        // Show specific error based on type
+        if (data.requiredApis && data.requiredApis.length > 0) {
+          toast.error(`Habilite estas APIs no Google Cloud Console: ${data.requiredApis.join(', ')}`, {
+            duration: 10000
+          })
+        } else {
+          toast.error(`Erro: ${data.details || data.error}`)
+        }
         return
       }
 
