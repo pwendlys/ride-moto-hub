@@ -1,0 +1,17 @@
+{
+  "name": "mototaxi-backend",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "start": "supabase start",
+    "stop": "supabase stop",
+    "status": "supabase status",
+    "db:push": "supabase db push",
+    "db:reset": "supabase db reset",
+    "functions:serve": "supabase functions serve",
+    "functions:deploy": "supabase functions deploy"
+  },
+  "devDependencies": {
+    "supabase": "^1.0.0"
+  }
+}
