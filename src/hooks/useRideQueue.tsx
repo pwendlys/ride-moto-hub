@@ -196,6 +196,13 @@ export const useRideQueue = () => {
 
       if (notificationError) throw notificationError
 
+      // Mark all other notifications for this ride as expired
+      await supabase
+        .from('ride_notifications')
+        .update({ status: 'expired' })
+        .eq('ride_id', rideId)
+        .neq('id', notificationId)
+
       // Remove from local state
       setActiveNotifications(prev => prev.filter(n => n.id !== notificationId))
 

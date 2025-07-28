@@ -157,35 +157,42 @@ async function notifyNextDriver(supabaseClient: any, rideId: string) {
 
   console.log(`🔔 Notifying driver ${nextNotification.driver_id} (position ${nextNotification.position_in_queue})`)
 
-  // Agendar próxima notificação após 60 segundos se esta expirar
+  // Agendar próxima notificação após 2 minutos se esta expirar (timeout aumentado)
   setTimeout(async () => {
     await handleNotificationTimeout(supabaseClient, nextNotification.id, rideId)
-  }, 60000)
+  }, 120000)
 }
 
 async function handleNotificationTimeout(supabaseClient: any, notificationId: string, rideId: string) {
-  // Verificar se a notificação ainda está pendente
-  const { data: notification, error } = await supabaseClient
+  console.log(`⏰ Checking notification timeout for: ${notificationId}`)
+  
+  // Verificar se a notificação ainda está pendente E se a corrida ainda está disponível
+  const { data: notification } = await supabaseClient
     .from('ride_notifications')
     .select('status')
     .eq('id', notificationId)
     .single()
 
-  if (error || !notification || notification.status !== 'pending') {
-    console.log(`⏰ Notification ${notificationId} already processed`)
-    return
+  const { data: ride } = await supabaseClient
+    .from('rides')
+    .select('status')
+    .eq('id', rideId)
+    .single()
+
+  if (notification?.status === 'pending' && ride?.status === 'requested') {
+    console.log(`⏰ Notification ${notificationId} expired, trying next driver`)
+    
+    // Marcar como expirada
+    await supabaseClient
+      .from('ride_notifications')
+      .update({ status: 'expired' })
+      .eq('id', notificationId)
+    
+    // Tentar próximo motorista
+    await notifyNextDriver(supabaseClient, rideId)
+  } else {
+    console.log(`⏰ Notification ${notificationId} no longer needs processing - ride status: ${ride?.status}, notification status: ${notification?.status}`)
   }
-
-  // Marcar como expirada
-  await supabaseClient
-    .from('ride_notifications')
-    .update({ status: 'expired' })
-    .eq('id', notificationId)
-
-  console.log(`⏰ Notification ${notificationId} expired, trying next driver`)
-
-  // Tentar próximo motorista
-  await notifyNextDriver(supabaseClient, rideId)
 }
 
 function calculateDistance(point1: {lat: number, lng: number}, point2: {lat: number, lng: number}): number {
