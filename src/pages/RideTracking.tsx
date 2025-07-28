@@ -51,11 +51,14 @@ export default function RideTracking() {
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null)
   const [driverData, setDriverData] = useState<DriverData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [mapLoading, setMapLoading] = useState(true)
+  const [mapError, setMapError] = useState<string | null>(null)
 
   const loadRideData = async () => {
     if (!id) return
 
     try {
+      console.log('🔍 Carregando dados da corrida:', id)
       const { data: rideData, error: rideError } = await supabase
         .from('rides')
         .select('*')
@@ -63,6 +66,23 @@ export default function RideTracking() {
         .single()
 
       if (rideError) throw rideError
+
+      console.log('✅ Dados da corrida carregados:', rideData)
+      
+      // Validate coordinates
+      if (!rideData.origin_lat || !rideData.origin_lng || !rideData.destination_lat || !rideData.destination_lng) {
+        console.error('❌ Coordenadas inválidas:', {
+          origin: { lat: rideData.origin_lat, lng: rideData.origin_lng },
+          destination: { lat: rideData.destination_lat, lng: rideData.destination_lng }
+        })
+        setMapError('Coordenadas da corrida são inválidas')
+      } else {
+        console.log('✅ Coordenadas válidas:', {
+          origin: { lat: rideData.origin_lat, lng: rideData.origin_lng },
+          destination: { lat: rideData.destination_lat, lng: rideData.destination_lng }
+        })
+        setMapError(null)
+      }
 
       setRide(rideData)
 
@@ -85,8 +105,9 @@ export default function RideTracking() {
         if (driverResult.data) setDriverData(driverResult.data)
       }
     } catch (error) {
-      console.error('Erro ao carregar dados da corrida:', error)
+      console.error('❌ Erro ao carregar dados da corrida:', error)
       toast.error('Erro ao carregar corrida')
+      setMapError('Erro ao carregar dados da corrida')
     } finally {
       setLoading(false)
     }
@@ -200,7 +221,10 @@ export default function RideTracking() {
     )
   }
 
-  const markers = [
+  // Validate coordinates before creating markers and center
+  const hasValidCoordinates = ride.origin_lat && ride.origin_lng && ride.destination_lat && ride.destination_lng
+
+  const markers = hasValidCoordinates ? [
     {
       position: { lat: ride.origin_lat, lng: ride.origin_lng },
       title: 'Origem',
@@ -211,12 +235,19 @@ export default function RideTracking() {
       title: 'Destino',
       icon: '/placeholder.svg', // Red marker
     },
-  ]
+  ] : []
 
-  const mapCenter = {
+  const mapCenter = hasValidCoordinates ? {
     lat: (ride.origin_lat + ride.destination_lat) / 2,
     lng: (ride.origin_lng + ride.destination_lng) / 2,
-  }
+  } : { lat: -21.764, lng: -43.350 } // Default center (Juiz de Fora)
+
+  console.log('🗺️ Configuração do mapa:', {
+    hasValidCoordinates,
+    mapCenter,
+    markersCount: markers.length,
+    mapError
+  })
 
   return (
     <div className="min-h-screen bg-background">
@@ -242,15 +273,57 @@ export default function RideTracking() {
           <div className="lg:col-span-2">
             <Card>
               <CardContent className="p-0">
-                <GoogleMap
-                  center={mapCenter}
-                  height="400px"
-                  markers={markers}
-                  showRoute={{
-                    origin: { lat: ride.origin_lat, lng: ride.origin_lng },
-                    destination: { lat: ride.destination_lat, lng: ride.destination_lng },
-                  }}
-                />
+                {mapError ? (
+                  <div className="h-[400px] flex items-center justify-center bg-muted">
+                    <div className="text-center p-6">
+                      <MapPin className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                      <h3 className="text-lg font-medium mb-2">Erro no Mapa</h3>
+                      <p className="text-sm text-muted-foreground mb-4">{mapError}</p>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => {
+                          setMapError(null)
+                          loadRideData()
+                        }}
+                      >
+                        Tentar Novamente
+                      </Button>
+                    </div>
+                  </div>
+                ) : !hasValidCoordinates ? (
+                  <div className="h-[400px] flex items-center justify-center bg-muted">
+                    <div className="text-center p-6">
+                      <MapPin className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                      <h3 className="text-lg font-medium mb-2">Coordenadas Indisponíveis</h3>
+                      <p className="text-sm text-muted-foreground">
+                        As coordenadas desta corrida não estão disponíveis.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <GoogleMap
+                    center={mapCenter}
+                    height="400px"
+                    markers={markers}
+                    showRoute={hasValidCoordinates ? {
+                      origin: { lat: ride.origin_lat, lng: ride.origin_lng },
+                      destination: { lat: ride.destination_lat, lng: ride.destination_lng },
+                    } : undefined}
+                    onMapLoad={() => {
+                      console.log('✅ Mapa carregado com sucesso')
+                      setMapLoading(false)
+                    }}
+                  />
+                )}
+                {mapLoading && hasValidCoordinates && !mapError && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/80">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                      <p className="text-sm text-muted-foreground">Carregando mapa...</p>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
