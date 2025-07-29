@@ -356,6 +356,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_expired_rides_and_notifications: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       get_current_user_role: {
         Args: Record<PropertyKey, never>
         Returns: string

@@ -136,10 +136,10 @@ async function createBroadcastNotifications(supabaseClient: any, rideId: string,
 
   console.log(`✅ Created ${notifications.length} broadcast notifications`)
   
-  // Configurar timeout global de 50 segundos para toda a corrida
+  // Configurar timeout global de 3 minutos para toda a corrida
   setTimeout(async () => {
     await handleRideTimeout(supabaseClient, rideId)
-  }, 50000)
+  }, 180000) // 3 minutos = 180000ms
 }
 
 async function handleRideTimeout(supabaseClient: any, rideId: string) {
@@ -153,7 +153,7 @@ async function handleRideTimeout(supabaseClient: any, rideId: string) {
     .single()
 
   if (ride?.status === 'requested') {
-    console.log(`⏰ Ride ${rideId} expired after 50 seconds - marking as expired`)
+    console.log(`⏰ Ride ${rideId} expired after 3 minutes - marking as expired`)
     
     // Marcar todas as notificações como expiradas
     await supabaseClient

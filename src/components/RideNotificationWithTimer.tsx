@@ -31,7 +31,7 @@ export const RideNotificationWithTimer: React.FC<RideNotificationWithTimerProps>
       const remaining = Math.max(0, expiresAt - now)
       
       setTimeLeft(remaining)
-      setProgress((remaining / 50000) * 100) // 50 seconds total
+      setProgress((remaining / 180000) * 100) // 3 minutes total (180 seconds)
       setIsExpired(remaining === 0)
       
       if (remaining === 0) {
@@ -46,7 +46,13 @@ export const RideNotificationWithTimer: React.FC<RideNotificationWithTimerProps>
   }, [notification.expires_at, notification.id, onDecline])
 
   const formatTimeLeft = (ms: number) => {
-    const seconds = Math.ceil(ms / 1000)
+    const totalSeconds = Math.ceil(ms / 1000)
+    const minutes = Math.floor(totalSeconds / 60)
+    const seconds = totalSeconds % 60
+    
+    if (minutes > 0) {
+      return `${minutes}:${seconds.toString().padStart(2, '0')}`
+    }
     return `${seconds}s`
   }
 

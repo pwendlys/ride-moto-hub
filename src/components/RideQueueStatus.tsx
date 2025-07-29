@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { useRideQueue } from '@/hooks/useRideQueue'
 
 export const RideQueueStatus = () => {
-  const { isListening, activeNotifications } = useRideQueue()
+  const { isListening, activeNotifications, connectionMonitor } = useRideQueue()
 
   return (
     <Card className="w-full max-w-md">
@@ -38,6 +38,19 @@ export const RideQueueStatus = () => {
         {!isListening && (
           <div className="text-xs text-red-600 text-center pt-2">
             ❌ Sistema offline - verifique sua conexão
+          </div>
+        )}
+
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-muted-foreground">Conectividade:</span>
+          <Badge variant={connectionMonitor.isConnected ? "default" : "destructive"}>
+            {connectionMonitor.isConnected ? "Online" : "Offline"}
+          </Badge>
+        </div>
+
+        {connectionMonitor.lastHeartbeat && (
+          <div className="text-xs text-muted-foreground text-center">
+            Último teste: {connectionMonitor.lastHeartbeat.toLocaleTimeString()}
           </div>
         )}
       </CardContent>

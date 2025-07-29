@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/integrations/supabase/client'
 import { useToast } from '@/hooks/use-toast'
+import { useConnectionMonitor } from '@/hooks/useConnectionMonitor'
 
 export interface RideNotification {
   id: string
@@ -25,18 +26,19 @@ export const useRideQueue = () => {
   const [activeNotifications, setActiveNotifications] = useState<RideNotification[]>([])
   const [isListening, setIsListening] = useState(false)
   const { toast } = useToast()
+  const connectionMonitor = useConnectionMonitor()
 
   const startListening = useCallback(async () => {
     if (isListening) return
 
     try {
       setIsListening(true)
-      console.log('🔔 Starting ride notification listener')
+      console.log('🔔 [useRideQueue] Starting ride notification listener...')
 
       // Get current user ID first
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError || !user) {
-        console.error('❌ Erro ao obter usuário para listener:', userError)
+        console.error('❌ [useRideQueue] Erro ao obter usuário para listener:', userError)
         setIsListening(false)
         toast({
           title: "Erro de autenticação",
@@ -46,13 +48,36 @@ export const useRideQueue = () => {
         return
       }
 
-      console.log(`🔔 Configurando listener para motorista: ${user.id}`)
+      console.log(`🔔 [useRideQueue] Configurando listener para motorista: ${user.id}`)
+
+      // Test connectivity before starting
+      console.log('🔗 [useRideQueue] Testando conectividade Supabase...')
+      const isConnected = await connectionMonitor.testConnection()
+
+      if (!isConnected) {
+        console.error('❌ [useRideQueue] Falha no teste de conectividade')
+        toast({
+          title: "Erro de conectividade",
+          description: "Não foi possível conectar ao Supabase. Verifique sua conexão.",
+          variant: "destructive"
+        })
+        setIsListening(false)
+        return
+      }
+      console.log('✅ [useRideQueue] Conectividade Supabase OK')
 
       // Buscar notificações pendentes existentes primeiro
+      console.log('📋 [useRideQueue] Buscando notificações pendentes...')
       await fetchPendingNotifications(user.id, setActiveNotifications)
 
-      // Verificar conectividade real-time
-      console.log('🔗 Testando conectividade real-time...')
+      // Run cleanup before starting to listen
+      console.log('🧹 [useRideQueue] Executando limpeza automática...')
+      try {
+        await supabase.rpc('cleanup_expired_rides_and_notifications')
+        console.log('✅ [useRideQueue] Limpeza automática concluída')
+      } catch (cleanupError) {
+        console.warn('⚠️ [useRideQueue] Erro na limpeza automática:', cleanupError)
+      }
       
       // Subscribe to ALL ride notifications (broadcast system)
       const channel = supabase
@@ -67,15 +92,21 @@ export const useRideQueue = () => {
           },
           async (payload) => {
             const notification = payload.new as RideNotification
-            console.log('📨 New ride notification received:', notification)
+            console.log('📨 [useRideQueue] Nova notificação recebida:', {
+              id: notification.id,
+              ride_id: notification.ride_id,
+              driver_id: notification.driver_id,
+              expires_at: notification.expires_at,
+              distance_km: notification.distance_km
+            })
 
           // Verificar se a notificação é para este motorista
           if (notification.driver_id !== user.id) {
-            console.log('⚠️ Notificação recebida para outro motorista, ignorando')
+            console.log('⚠️ [useRideQueue] Notificação recebida para outro motorista, ignorando')
             return
           }
 
-          console.log('✅ Notificação confirmada para este motorista')
+          console.log('✅ [useRideQueue] Notificação confirmada para este motorista')
 
           // Fetch complete ride data
           const enrichedNotification = await enrichNotificationData(notification)
@@ -302,7 +333,8 @@ export const useRideQueue = () => {
     stopListening,
     acceptNotification,
     declineNotification,
-    refreshNotifications
+    refreshNotifications,
+    connectionMonitor
   }
 }
 

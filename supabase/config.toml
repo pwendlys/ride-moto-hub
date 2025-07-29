@@ -5,3 +5,12 @@ verify_jwt = true
 
 [functions.get-maps-key]
 verify_jwt = true
+
+[functions.ride-queue-manager]
+verify_jwt = false
+
+[functions.cleanup-expired-rides]
+verify_jwt = false
+
+[functions.trigger-ride-creation]
+verify_jwt = false
