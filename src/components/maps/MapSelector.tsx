@@ -57,10 +57,19 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
   const [isGettingAddress, setIsGettingAddress] = useState(false)
 
   // Function to get address from coordinates using reverse geocoding
-  const getAddressFromCoords = async (coords: LocationCoords): Promise<string> => {
+  const getAddressFromCoords = async (coords: LocationCoords, retryCount = 0): Promise<string> => {
     if (!user) return 'Localização atual'
     
     try {
+      // Check session before making request
+      const { data: sessionData } = await supabase.auth.getSession()
+      
+      if (!sessionData.session && retryCount === 0) {
+        console.log('🔄 Refreshing session before reverse geocode...')
+        await supabase.auth.refreshSession()
+        return await getAddressFromCoords(coords, 1)
+      }
+
       const { data, error } = await supabase.functions.invoke('google-maps-proxy', {
         body: {
           action: 'reverse-geocode',
@@ -71,6 +80,13 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
 
       if (error) {
         console.error('Erro no reverse geocoding:', error)
+        
+        // Retry once on error
+        if (retryCount === 0) {
+          await supabase.auth.refreshSession()
+          return await getAddressFromCoords(coords, 1)
+        }
+        
         return 'Localização atual'
       }
 
@@ -108,7 +124,7 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
   }, [currentLocation, origin, onLocationSelect, locationLoading, user])
 
   // Debounced search function with detailed logging
-  const searchPlaces = useCallback(async (query: string, type: 'origin' | 'destination') => {
+  const searchPlaces = useCallback(async (query: string, type: 'origin' | 'destination', retryCount = 0) => {
     if (!query.trim() || !user) {
       if (type === 'origin') setOriginResults([])
       else setDestinationResults([])
@@ -121,6 +137,23 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
     else setIsSearchingDestination(true)
 
     try {
+      // Get fresh session data
+      const { data: sessionData } = await supabase.auth.getSession()
+      
+      if (!sessionData.session) {
+        console.error('❌ No active session found, refreshing...')
+        await supabase.auth.refreshSession()
+        
+        // Retry once after refresh
+        if (retryCount === 0) {
+          setTimeout(() => searchPlaces(query, type, 1), 1000)
+          return
+        } else {
+          toast.error('Sessão expirada. Faça login novamente.')
+          return
+        }
+      }
+
       const { data, error } = await supabase.functions.invoke('google-maps-proxy', {
         body: {
           action: 'places-autocomplete',
@@ -133,8 +166,18 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
           error,
           query,
           type,
+          retryCount,
           timestamp: new Date().toISOString()
         })
+        
+        // If auth error and haven't retried, try refreshing session
+        if (error.message?.includes('Edge Function returned a non-2xx status code') && retryCount === 0) {
+          console.log('🔄 Retrying after session refresh...')
+          await supabase.auth.refreshSession()
+          setTimeout(() => searchPlaces(query, type, 1), 1000)
+          return
+        }
+        
         toast.error(`Erro na busca: ${error.message}`)
         return
       }
@@ -207,12 +250,22 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
     return () => clearTimeout(timeoutId)
   }, [destinationQuery, searchPlaces])
 
-  const selectPlace = async (place: any, type: 'origin' | 'destination') => {
+  const selectPlace = async (place: any, type: 'origin' | 'destination', retryCount = 0) => {
     if (!user) return
     
     console.log(`📍 Selecting place: ${place.description} (${type})`)
     
     try {
+      // Check session before making request
+      const { data: sessionData } = await supabase.auth.getSession()
+      
+      if (!sessionData.session && retryCount === 0) {
+        console.log('🔄 Refreshing session before place details...')
+        await supabase.auth.refreshSession()
+        setTimeout(() => selectPlace(place, type, 1), 1000)
+        return
+      }
+
       const { data, error } = await supabase.functions.invoke('google-maps-proxy', {
         body: {
           action: 'place-details',
@@ -293,11 +346,21 @@ export const MapSelector: React.FC<MapSelectorProps> = ({
     }
   }
 
-  const calculateRoute = async () => {
+  const calculateRoute = async (retryCount = 0) => {
     if (!origin || !destination || !user) return
 
     setIsCalculatingRoute(true)
     try {
+      // Check session before making request
+      const { data: sessionData } = await supabase.auth.getSession()
+      
+      if (!sessionData.session && retryCount === 0) {
+        console.log('🔄 Refreshing session before route calculation...')
+        await supabase.auth.refreshSession()
+        setTimeout(() => calculateRoute(1), 1000)
+        return
+      }
+
       const { data, error } = await supabase.functions.invoke('google-maps-proxy', {
         body: {
           action: 'directions',

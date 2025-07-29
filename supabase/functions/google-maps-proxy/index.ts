@@ -34,20 +34,40 @@ serve(async (req) => {
     { global: { headers: { Authorization: authHeader } } }
   )
 
-  const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
-  
-  if (authError || !user) {
-    console.error('❌ Invalid authentication token:', authError)
+  try {
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    
+    if (authError || !user) {
+      console.error('❌ Invalid authentication token:', authError)
+      return new Response(
+        JSON.stringify({ 
+          error: 'Unauthorized - Invalid token',
+          authError: authError?.message || 'Token validation failed',
+          timestamp: new Date().toISOString()
+        }),
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+    
+    console.log('✅ User authenticated:', user.id)
+    
+  } catch (authErrorCatch) {
+    console.error('❌ Authentication error:', authErrorCatch)
     return new Response(
-      JSON.stringify({ error: 'Unauthorized - Invalid token' }),
+      JSON.stringify({ 
+        error: 'Authentication failed',
+        details: authErrorCatch.message,
+        timestamp: new Date().toISOString()
+      }),
       { 
         status: 401, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     );
   }
-
-  console.log('✅ User authenticated:', user.id)
 
   try {
     const backendApiKey = Deno.env.get('GOOGLE_MAPS_BACKEND_API_KEY');
