@@ -31,7 +31,7 @@ export const RideNotificationWithTimer: React.FC<RideNotificationWithTimerProps>
       const remaining = Math.max(0, expiresAt - now)
       
       setTimeLeft(remaining)
-      setProgress((remaining / 45000) * 100) // 45 seconds total
+      setProgress((remaining / 50000) * 100) // 50 seconds total
       setIsExpired(remaining === 0)
       
       if (remaining === 0) {
@@ -72,7 +72,7 @@ export const RideNotificationWithTimer: React.FC<RideNotificationWithTimerProps>
             <MapPin className="h-5 w-5 text-primary" />
             Nova Corrida
             <Badge variant="outline" className="ml-2">
-              #{notification.position_in_queue}º na fila
+              📢 Broadcast
             </Badge>
           </CardTitle>
           <Badge variant="default" className="bg-green-500">

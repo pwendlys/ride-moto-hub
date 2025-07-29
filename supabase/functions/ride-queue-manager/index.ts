@@ -59,18 +59,15 @@ serve(async (req) => {
       )
     }
 
-    // Criar notificações para todos os motoristas (em ordem de proximidade)
-    const notifications = await createNotificationQueue(supabaseClient, rideId, nearbyDrivers)
-    
-    // Iniciar processo de notificação do primeiro motorista
-    await notifyNextDriver(supabaseClient, rideId)
+    // Criar notificações broadcast para todos os motoristas simultaneamente
+    await createBroadcastNotifications(supabaseClient, rideId, nearbyDrivers)
 
-    console.log(`✅ Created ${notifications.length} notifications for ride: ${rideId}`)
+    console.log(`✅ Created broadcast notifications for ${nearbyDrivers.length} drivers for ride: ${rideId}`)
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        driversNotified: notifications.length,
+        driversNotified: nearbyDrivers.length,
         rideId 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -117,81 +114,57 @@ async function findNearbyDrivers(supabaseClient: any, originLat: number, originL
   return driversWithDistance
 }
 
-async function createNotificationQueue(supabaseClient: any, rideId: string, drivers: any[]) {
-  const notifications = drivers.map((driver, index) => ({
+async function createBroadcastNotifications(supabaseClient: any, rideId: string, drivers: any[]) {
+  console.log(`📢 Creating broadcast notifications for ${drivers.length} drivers`)
+  
+  // Criar notificações simultâneas para todos os motoristas (sem conceito de fila)
+  const notifications = drivers.map((driver) => ({
     ride_id: rideId,
     driver_id: driver.driver_id,
-    position_in_queue: index + 1,
     distance_km: driver.distance,
-    status: index === 0 ? 'pending' : 'pending' // Todos começam como pending
+    status: 'pending'
   }))
 
-  const { data, error } = await supabaseClient
+  const { error } = await supabaseClient
     .from('ride_notifications')
     .insert(notifications)
-    .select()
 
   if (error) {
-    console.error('Error creating notifications:', error)
+    console.error('Error creating broadcast notifications:', error)
     throw error
   }
 
-  return data
-}
-
-async function notifyNextDriver(supabaseClient: any, rideId: string) {
-  // Buscar próxima notificação pendente
-  const { data: nextNotification, error } = await supabaseClient
-    .from('ride_notifications')
-    .select('*')
-    .eq('ride_id', rideId)
-    .eq('status', 'pending')
-    .order('position_in_queue', { ascending: true })
-    .limit(1)
-    .single()
-
-  if (error || !nextNotification) {
-    console.log(`❌ No more drivers to notify for ride: ${rideId}`)
-    return
-  }
-
-  console.log(`🔔 Notifying driver ${nextNotification.driver_id} (position ${nextNotification.position_in_queue})`)
-
-  // Agendar próxima notificação após 2 minutos se esta expirar (timeout aumentado)
-  setTimeout(async () => {
-    await handleNotificationTimeout(supabaseClient, nextNotification.id, rideId)
-  }, 120000)
-}
-
-async function handleNotificationTimeout(supabaseClient: any, notificationId: string, rideId: string) {
-  console.log(`⏰ Checking notification timeout for: ${notificationId}`)
+  console.log(`✅ Created ${notifications.length} broadcast notifications`)
   
-  // Verificar se a notificação ainda está pendente E se a corrida ainda está disponível
-  const { data: notification } = await supabaseClient
-    .from('ride_notifications')
-    .select('status')
-    .eq('id', notificationId)
-    .single()
+  // Configurar timeout global de 50 segundos para toda a corrida
+  setTimeout(async () => {
+    await handleRideTimeout(supabaseClient, rideId)
+  }, 50000)
+}
 
+async function handleRideTimeout(supabaseClient: any, rideId: string) {
+  console.log(`⏰ Checking ride timeout for: ${rideId}`)
+  
+  // Verificar se a corrida ainda está disponível
   const { data: ride } = await supabaseClient
     .from('rides')
     .select('status')
     .eq('id', rideId)
     .single()
 
-  if (notification?.status === 'pending' && ride?.status === 'requested') {
-    console.log(`⏰ Notification ${notificationId} expired, trying next driver`)
+  if (ride?.status === 'requested') {
+    console.log(`⏰ Ride ${rideId} expired after 50 seconds - marking as expired`)
     
-    // Marcar como expirada
+    // Marcar todas as notificações como expiradas
     await supabaseClient
       .from('ride_notifications')
       .update({ status: 'expired' })
-      .eq('id', notificationId)
+      .eq('ride_id', rideId)
+      .eq('status', 'pending')
     
-    // Tentar próximo motorista
-    await notifyNextDriver(supabaseClient, rideId)
+    console.log(`❌ Ride ${rideId} broadcast expired - all notifications marked as expired`)
   } else {
-    console.log(`⏰ Notification ${notificationId} no longer needs processing - ride status: ${ride?.status}, notification status: ${notification?.status}`)
+    console.log(`⏰ Ride ${rideId} no longer needs timeout processing - status: ${ride?.status}`)
   }
 }
 

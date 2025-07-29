@@ -186,7 +186,6 @@ export type Database = {
           expires_at: string
           id: string
           notified_at: string
-          position_in_queue: number
           ride_id: string
           status: string
           updated_at: string
@@ -198,7 +197,6 @@ export type Database = {
           expires_at?: string
           id?: string
           notified_at?: string
-          position_in_queue: number
           ride_id: string
           status?: string
           updated_at?: string
@@ -210,7 +208,6 @@ export type Database = {
           expires_at?: string
           id?: string
           notified_at?: string
-          position_in_queue?: number
           ride_id?: string
           status?: string
           updated_at?: string
@@ -228,6 +225,7 @@ export type Database = {
       rides: {
         Row: {
           accepted_at: string | null
+          broadcast_expires_at: string | null
           cancelled_at: string | null
           completed_at: string | null
           created_at: string
@@ -257,6 +255,7 @@ export type Database = {
         }
         Insert: {
           accepted_at?: string | null
+          broadcast_expires_at?: string | null
           cancelled_at?: string | null
           completed_at?: string | null
           created_at?: string
@@ -286,6 +285,7 @@ export type Database = {
         }
         Update: {
           accepted_at?: string | null
+          broadcast_expires_at?: string | null
           cancelled_at?: string | null
           completed_at?: string | null
           created_at?: string

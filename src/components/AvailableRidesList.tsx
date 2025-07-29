@@ -91,7 +91,7 @@ export const AvailableRidesList = ({
                     {timeRemaining}s
                   </Badge>
                   <Badge variant="outline">
-                    #{notification.position_in_queue}
+                    📢 Broadcast
                   </Badge>
                 </div>
               </div>

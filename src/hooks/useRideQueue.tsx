@@ -6,7 +6,6 @@ export interface RideNotification {
   id: string
   ride_id: string
   driver_id: string
-  position_in_queue: number
   notified_at: string
   expires_at: string
   status: 'pending' | 'accepted' | 'expired' | 'cancelled'
@@ -55,9 +54,9 @@ export const useRideQueue = () => {
       // Verificar conectividade real-time
       console.log('🔗 Testando conectividade real-time...')
       
-      // Subscribe to ride notifications for current driver
+      // Subscribe to ALL ride notifications (broadcast system)
       const channel = supabase
-        .channel('ride-queue-notifications')
+        .channel('ride-broadcast-notifications')
         .on(
           'postgres_changes',
           {
@@ -103,27 +102,47 @@ export const useRideQueue = () => {
           }
         }
       )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'ride_notifications',
-          filter: `driver_id=eq.${user.id}`
-        },
-        (payload) => {
-          const updatedNotification = payload.new as RideNotification
-          console.log('📝 Notification updated:', updatedNotification)
-          
-          // Remove notification if expired or accepted by someone else
-          if (updatedNotification.status !== 'pending') {
-            console.log(`🗑️ Removendo notificação com status: ${updatedNotification.status}`)
-            setActiveNotifications(prev => 
-              prev.filter(n => n.id !== updatedNotification.id)
-            )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'rides',
+          },
+          (payload) => {
+            const updatedRide = payload.new as any
+            console.log('📝 Ride updated:', updatedRide)
+            
+            // Remove all notifications for this ride if it was accepted or expired
+            if (updatedRide.status !== 'requested') {
+              console.log(`🗑️ Removendo notificações da corrida ${updatedRide.id} - status: ${updatedRide.status}`)
+              setActiveNotifications(prev => 
+                prev.filter(n => n.ride_id !== updatedRide.id)
+              )
+            }
           }
-        }
-      )
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'ride_notifications',
+            filter: `driver_id=eq.${user.id}`
+          },
+          (payload) => {
+            const updatedNotification = payload.new as RideNotification
+            console.log('📝 Notification updated:', updatedNotification)
+            
+            // Remove notification if expired or accepted
+            if (updatedNotification.status !== 'pending') {
+              console.log(`🗑️ Removendo notificação com status: ${updatedNotification.status}`)
+              setActiveNotifications(prev => 
+                prev.filter(n => n.id !== updatedNotification.id)
+              )
+            }
+          }
+        )
       .subscribe((status) => {
         console.log('📡 Status da conexão real-time:', status)
         if (status === 'SUBSCRIBED') {
@@ -203,8 +222,8 @@ export const useRideQueue = () => {
         .eq('ride_id', rideId)
         .neq('id', notificationId)
 
-      // Remove from local state
-      setActiveNotifications(prev => prev.filter(n => n.id !== notificationId))
+      // Remove ALL notifications for this ride from local state (broadcast effect)
+      setActiveNotifications(prev => prev.filter(n => n.ride_id !== rideId))
 
       toast({
         title: "Corrida aceita!",
