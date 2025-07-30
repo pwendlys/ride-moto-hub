@@ -85,12 +85,24 @@ serve(async (req) => {
     // Get Google Maps frontend API key from environment
     const frontendApiKey = Deno.env.get('GOOGLE_MAPS_FRONTEND_API_KEY');
     
+    console.log('🔍 Checking environment variables:', {
+      hasFrontendKey: !!frontendApiKey,
+      keyLength: frontendApiKey?.length || 0,
+      keyPrefix: frontendApiKey?.substring(0, 10) || 'none'
+    })
+    
     if (!frontendApiKey) {
       console.error('❌ GOOGLE_MAPS_FRONTEND_API_KEY not found in environment variables');
       return new Response(
         JSON.stringify({ 
           error: 'Google Maps frontend API key not configured',
-          details: 'Please configure GOOGLE_MAPS_FRONTEND_API_KEY in Supabase secrets'
+          code: 'MISSING_API_KEY',
+          details: 'Please configure GOOGLE_MAPS_FRONTEND_API_KEY in Supabase secrets',
+          troubleshooting: [
+            'Go to Supabase Dashboard > Settings > API',
+            'Add GOOGLE_MAPS_FRONTEND_API_KEY to environment variables',
+            'Ensure the API key has proper restrictions for your domain'
+          ]
         }),
         { 
           status: 500, 
@@ -99,9 +111,29 @@ serve(async (req) => {
       );
     }
 
-    console.log('✅ Frontend API key found, returning to client')
+    // Validate API key format
+    if (frontendApiKey.length < 30) {
+      console.error('❌ Frontend API key appears to be invalid (too short):', frontendApiKey.length);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid API key format',
+          code: 'INVALID_API_KEY',
+          details: 'API key appears to be too short - check configuration'
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    console.log('✅ Frontend API key validated and ready to return')
     return new Response(
-      JSON.stringify({ apiKey: frontendApiKey }),
+      JSON.stringify({ 
+        apiKey: frontendApiKey,
+        timestamp: new Date().toISOString(),
+        success: true
+      }),
       { 
         status: 200, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
