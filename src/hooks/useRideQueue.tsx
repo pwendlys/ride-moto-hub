@@ -10,16 +10,6 @@ export interface RideNotification {
   notified_at: string
   expires_at: string
   status: 'pending' | 'accepted' | 'expired' | 'cancelled'
-  distance_km?: number
-  ride?: {
-    origin_address: string
-    destination_address: string
-    estimated_price?: number
-    passenger: {
-      full_name: string
-      phone: string
-    }
-  }
 }
 
 export const useRideQueue = () => {
@@ -66,9 +56,9 @@ export const useRideQueue = () => {
       }
       console.log('✅ [useRideQueue] Conectividade Supabase OK')
 
-      // Buscar notificações pendentes existentes primeiro
+      // Buscar notificações pendentes existentes primeiro (sem dados enriquecidos)
       console.log('📋 [useRideQueue] Buscando notificações pendentes...')
-      await fetchPendingNotifications(user.id, setActiveNotifications)
+      await fetchPendingNotificationsSimple(user.id, setActiveNotifications)
 
       // Run cleanup before starting to listen
       console.log('🧹 [useRideQueue] Executando limpeza automática...')
@@ -96,8 +86,7 @@ export const useRideQueue = () => {
               id: notification.id,
               ride_id: notification.ride_id,
               driver_id: notification.driver_id,
-              expires_at: notification.expires_at,
-              distance_km: notification.distance_km
+              expires_at: notification.expires_at
             })
 
           // Verificar se a notificação é para este motorista
@@ -108,28 +97,23 @@ export const useRideQueue = () => {
 
           console.log('✅ [useRideQueue] Notificação confirmada para este motorista')
 
-          // Fetch complete ride data
-          const enrichedNotification = await enrichNotificationData(notification)
-          if (enrichedNotification) {
-            setActiveNotifications(prev => [enrichedNotification, ...prev])
-            
-            toast({
-              title: "Nova corrida disponível!",
-              description: `De: ${enrichedNotification.ride?.origin_address}`,
-              duration: 10000
-            })
+          // Add notification directly without enriching data
+          setActiveNotifications(prev => [notification, ...prev])
+          
+          toast({
+            title: "Nova corrida disponível!",
+            description: "Um passageiro está solicitando uma corrida",
+            duration: 10000
+          })
 
-            console.log('🔔 Notificação adicionada à lista:', enrichedNotification)
+          console.log('🔔 Notificação adicionada à lista:', notification)
 
-            // Play notification sound
-            try {
-              const audio = new Audio('/notification.mp3')
-              audio.play().catch(() => console.log('🔔 Nova corrida!'))
-            } catch {
-              console.log('🔔 Nova corrida!')
-            }
-          } else {
-            console.error('❌ Erro ao enriquecer dados da notificação')
+          // Play notification sound
+          try {
+            const audio = new Audio('/notification.mp3')
+            audio.play().catch(() => console.log('🔔 Nova corrida!'))
+          } catch {
+            console.log('🔔 Nova corrida!')
           }
         }
       )
@@ -322,7 +306,7 @@ export const useRideQueue = () => {
   const refreshNotifications = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      await fetchPendingNotifications(user.id, setActiveNotifications)
+      await fetchPendingNotificationsSimple(user.id, setActiveNotifications)
     }
   }, [])
 
@@ -338,14 +322,14 @@ export const useRideQueue = () => {
   }
 }
 
-// Função para buscar notificações pendentes do motorista
-const fetchPendingNotifications = async (driverId: string, setActiveNotifications: React.Dispatch<React.SetStateAction<RideNotification[]>>) => {
+// Função simplificada para buscar notificações pendentes do motorista
+const fetchPendingNotificationsSimple = async (driverId: string, setActiveNotifications: React.Dispatch<React.SetStateAction<RideNotification[]>>) => {
   try {
-    console.log('🔍 Buscando notificações pendentes existentes...')
+    console.log('🔍 Buscando notificações pendentes existentes (simplificado)...')
     
     const { data: notifications, error } = await supabase
       .from('ride_notifications')
-      .select('*')
+      .select('id, ride_id, driver_id, notified_at, expires_at, status')
       .eq('driver_id', driverId)
       .eq('status', 'pending')
       .gt('expires_at', new Date().toISOString())
@@ -357,76 +341,13 @@ const fetchPendingNotifications = async (driverId: string, setActiveNotification
     }
 
     console.log(`📋 Encontradas ${notifications.length} notificações pendentes`)
+    setActiveNotifications(notifications as RideNotification[])
 
-    // Enriquecer cada notificação com dados completos
-    const enrichedNotifications = await Promise.all(
-      notifications.map(notification => enrichNotificationData(notification as RideNotification))
-    )
-
-    // Filtrar notificações válidas e atualizar estado
-    const validNotifications = enrichedNotifications.filter(Boolean) as RideNotification[]
-    setActiveNotifications(validNotifications)
-
-    if (validNotifications.length > 0) {
-      console.log(`✅ ${validNotifications.length} notificações carregadas`)
+    if (notifications.length > 0) {
+      console.log(`✅ ${notifications.length} notificações carregadas`)
     }
 
   } catch (error) {
     console.error('❌ Erro ao buscar notificações pendentes:', error)
-  }
-}
-
-async function enrichNotificationData(notification: RideNotification): Promise<RideNotification | null> {
-  try {
-    console.log(`🔍 Enriquecendo dados da notificação: ${notification.id}`)
-    
-    // Fetch ride with passenger data
-    const { data: ride, error: rideError } = await supabase
-      .from('rides')
-      .select('*')
-      .eq('id', notification.ride_id)
-      .single()
-
-    if (rideError || !ride) {
-      console.error('❌ Erro ao buscar dados da corrida:', rideError)
-      return null
-    }
-
-    console.log('✅ Dados da corrida encontrados:', { 
-      id: ride.id, 
-      origin: ride.origin_address, 
-      destination: ride.destination_address 
-    })
-
-    // Fetch passenger data
-    const { data: passenger, error: passengerError } = await supabase
-      .from('profiles')
-      .select('full_name, phone')
-      .eq('user_id', ride.passenger_id)
-      .single()
-
-    if (passengerError || !passenger) {
-      console.error('❌ Erro ao buscar dados do passageiro:', passengerError)
-      return null
-    }
-
-    console.log('✅ Dados do passageiro encontrados:', passenger.full_name)
-
-    const enrichedData = {
-      ...notification,
-      ride: {
-        origin_address: ride.origin_address,
-        destination_address: ride.destination_address,
-        estimated_price: ride.estimated_price,
-        passenger
-      }
-    }
-
-    console.log('✅ Notificação enriquecida com sucesso')
-    return enrichedData
-
-  } catch (error) {
-    console.error('❌ Erro ao enriquecer dados da notificação:', error)
-    return null
   }
 }

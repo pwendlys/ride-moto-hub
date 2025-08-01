@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useDriverLocation } from "@/hooks/useDriverLocation";
 import { useDriverRideNotifications } from "@/hooks/useRides";
-import { RideNotification } from "@/components/RideNotification";
+import { SimpleRideAlert } from "@/components/SimpleRideAlert";
 import { 
   Bike, 
   Car,
@@ -1241,23 +1241,21 @@ const Dashboard = () => {
               </div>
             )}
 
-            {/* Driver Ride Notifications */}
+            {/* Driver Ride Notifications - Removed detailed view */}
             {profile.user_type === 'driver' && rideNotifications.pendingRides.length > 0 && (
-              <div className="mb-6 space-y-4">
-                <h3 className="text-lg font-semibold">Corridas Disponíveis</h3>
-                {rideNotifications.pendingRides.map((ride) => (
-                  <RideNotification
-                    key={ride.id}
-                    ride={ride}
-                    onAccept={async (rideId) => {
-                      // Navigate to driver online page to handle ride acceptance
-                      navigate('/driver/online');
-                    }}
-                    onDecline={(rideId) => {
-                      rideNotifications.removePendingRide(rideId);
-                    }}
-                  />
-                ))}
+              <div className="mb-6">
+                <Card>
+                  <CardContent className="p-6">
+                    <h3 className="text-lg font-semibold mb-2">Corridas Disponíveis</h3>
+                    <p className="text-muted-foreground mb-4">
+                      Você tem {rideNotifications.pendingRides.length} corridas aguardando. 
+                      Vá para o modo online para aceitar corridas.
+                    </p>
+                    <Button onClick={() => navigate('/driver/online')}>
+                      Ir para Modo Online
+                    </Button>
+                  </CardContent>
+                </Card>
               </div>
             )}
 

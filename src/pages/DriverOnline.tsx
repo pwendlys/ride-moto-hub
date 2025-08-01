@@ -9,9 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { GoogleMap } from '@/components/maps/GoogleMap';
-import { RideNotificationWithTimer } from '@/components/RideNotificationWithTimer';
+
 import { RideQueueStatus } from '@/components/RideQueueStatus';
-import { AvailableRidesList } from '@/components/AvailableRidesList';
+import { MinimalRidesList } from '@/components/MinimalRidesList';
 import { useToast } from '@/hooks/use-toast';
 import { 
   MapPin, 
@@ -251,7 +251,7 @@ const DriverOnline = () => {
             </div>
           </div>
 
-          <AvailableRidesList
+          <MinimalRidesList
             notifications={rideQueue.activeNotifications}
             onAccept={handleAcceptRide}
             onDecline={handleDeclineRide}
