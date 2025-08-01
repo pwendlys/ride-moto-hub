@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Car, Clock, MapPin, DollarSign } from 'lucide-react'
-import { MapSelector } from '@/components/maps/MapSelector'
+import { AddressSelector } from '@/components/AddressSelector'
 import { useRides } from '@/hooks/useRides'
 import { useAuth } from '@/hooks/useAuth'
 import { WaitingForDriver } from '@/components/WaitingForDriver'
@@ -93,9 +93,9 @@ export default function RideRequest() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Map Selection */}
+          {/* Address Selection */}
           <div className="lg:col-span-2">
-            <MapSelector onRouteCalculated={handleRouteCalculated} />
+            <AddressSelector onRouteCalculated={handleRouteCalculated} />
           </div>
 
           {/* Route Summary */}
