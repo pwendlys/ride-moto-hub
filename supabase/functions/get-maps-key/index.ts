@@ -8,11 +8,8 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  console.log('🔑 get-maps-key function called!', { method: req.method, url: req.url })
-  
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    console.log('✅ Handling CORS preflight request')
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -20,7 +17,6 @@ serve(async (req) => {
     // Verify authentication
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
-      console.error('❌ No authorization header provided')
       return new Response(
         JSON.stringify({ 
           error: 'Authentication required',
@@ -33,8 +29,6 @@ serve(async (req) => {
       );
     }
 
-    console.log('🔍 Authorization header present, verifying token...')
-
     // Create Supabase client with auth header
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -46,8 +40,6 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
     
     if (authError) {
-      console.error('❌ Authentication failed:', authError.message, 'Status:', authError.status)
-      
       // Check if it's a token expiration error
       const isTokenExpired = authError.message?.includes('expired') || 
                             authError.message?.includes('invalid') ||
@@ -67,7 +59,6 @@ serve(async (req) => {
     }
 
     if (!user) {
-      console.error('❌ No user found after successful auth')
       return new Response(
         JSON.stringify({ 
           error: 'User not found',
@@ -80,29 +71,15 @@ serve(async (req) => {
       );
     }
 
-    console.log('✅ User authenticated:', user.id)
-
     // Get Google Maps frontend API key from environment
     const frontendApiKey = Deno.env.get('GOOGLE_MAPS_FRONTEND_API_KEY');
     
-    console.log('🔍 Checking environment variables:', {
-      hasFrontendKey: !!frontendApiKey,
-      keyLength: frontendApiKey?.length || 0,
-      keyPrefix: frontendApiKey?.substring(0, 10) || 'none'
-    })
-    
     if (!frontendApiKey) {
-      console.error('❌ GOOGLE_MAPS_FRONTEND_API_KEY not found in environment variables');
       return new Response(
         JSON.stringify({ 
           error: 'Google Maps frontend API key not configured',
           code: 'MISSING_API_KEY',
-          details: 'Please configure GOOGLE_MAPS_FRONTEND_API_KEY in Supabase secrets',
-          troubleshooting: [
-            'Go to Supabase Dashboard > Settings > API',
-            'Add GOOGLE_MAPS_FRONTEND_API_KEY to environment variables',
-            'Ensure the API key has proper restrictions for your domain'
-          ]
+          details: 'Please configure GOOGLE_MAPS_FRONTEND_API_KEY in Supabase secrets'
         }),
         { 
           status: 500, 
@@ -113,7 +90,6 @@ serve(async (req) => {
 
     // Validate API key format
     if (frontendApiKey.length < 30) {
-      console.error('❌ Frontend API key appears to be invalid (too short):', frontendApiKey.length);
       return new Response(
         JSON.stringify({ 
           error: 'Invalid API key format',
@@ -126,8 +102,6 @@ serve(async (req) => {
         }
       );
     }
-
-    console.log('✅ Frontend API key validated and ready to return')
     return new Response(
       JSON.stringify({ 
         apiKey: frontendApiKey,
@@ -141,7 +115,6 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('💥 Critical error in get-maps-key:', error);
     return new Response(
       JSON.stringify({ 
         error: 'Internal server error',

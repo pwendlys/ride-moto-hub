@@ -117,29 +117,19 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
       if (!isMounted) return
       
       try {
-        console.log('🗺️ [GoogleMap] Iniciando carregamento do Google Maps...')
-        console.log('🔍 [GoogleMap] Estado atual:', {
-          hasUser: !!user,
-          userId: user?.id,
-          hasGoogleMaps: !!window.google?.maps,
-          timestamp: new Date().toISOString()
-        })
-        
         setIsLoading(true)
         setError(null)
 
         // Implementar timeout de 15 segundos
         loadingTimeout = setTimeout(() => {
           if (isMounted) {
-            console.error('⏰ [GoogleMap] Timeout no carregamento do mapa')
-            setError('Timeout no carregamento do mapa. Verifique sua conexão.')
+            setError('Tempo limite excedido. Verifique sua conexão.')
             setIsLoading(false)
           }
         }, 15000)
 
         // Check if Google Maps is already loaded
         if (window.google?.maps) {
-          console.log('✅ [GoogleMap] Google Maps já carregado, inicializando...')
           clearTimeout(loadingTimeout)
           initializeMap()
           return
@@ -147,14 +137,11 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
 
         // Check if user is authenticated
         if (!user) {
-          console.log('❌ [GoogleMap] Usuário não autenticado, aguardando...')
           clearTimeout(loadingTimeout)
           setError('Usuário não autenticado')
           setIsLoading(false)
           return
         }
-
-        console.log('📡 [GoogleMap] Buscando API key via edge function...')
         
         // Get API key from edge function with improved error handling
         let { data: keyData, error: keyError } = await supabase.functions.invoke('get-maps-key')
@@ -164,25 +151,13 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
           return
         }
         
-        console.log('📋 [GoogleMap] Resposta da edge function:', {
-          hasData: !!keyData,
-          hasError: !!keyError,
-          hasApiKey: !!keyData?.apiKey,
-          keyLength: keyData?.apiKey?.length || 0,
-          errorMessage: keyError?.message
-        })
-        
         if (keyError) {
-          console.error('❌ [GoogleMap] Erro na edge function:', keyError)
-          
           // Check if it's an authentication error
           if (keyError.message?.includes('401') || keyError.message?.includes('Unauthorized') || keyError.message?.includes('TOKEN_EXPIRED')) {
             // Try to refresh the session
-            console.log('🔄 [GoogleMap] Tentando renovar sessão...')
             const { error: refreshError } = await supabase.auth.refreshSession()
             
             if (refreshError) {
-              console.error('❌ [GoogleMap] Erro ao renovar sessão:', refreshError)
               throw new Error('Sessão expirada. Por favor, faça login novamente.')
             }
             
@@ -192,40 +167,29 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
             }
             
             // Retry with refreshed session
-            console.log('🔄 [GoogleMap] Tentando novamente com sessão renovada...')
             const retryResult = await supabase.functions.invoke('get-maps-key')
             
             if (retryResult.error) {
-              console.error('❌ [GoogleMap] Erro na segunda tentativa:', retryResult.error)
               throw new Error('Erro de autenticação. Por favor, faça login novamente.')
             }
             
             if (!retryResult.data?.apiKey) {
-              console.error('❌ [GoogleMap] API key não encontrada após renovação')
-              throw new Error('Chave da API do Google Maps não encontrada após renovação da sessão')
+              throw new Error('Chave da API não encontrada')
             }
             
             // Use the retry data
             keyData = retryResult.data
-            console.log('✅ [GoogleMap] API key obtida após renovação da sessão')
           } else {
             throw new Error(`Erro ao obter chave da API: ${keyError.message}`)
           }
         } else if (!keyData?.apiKey) {
-          console.error('❌ [GoogleMap] API key não encontrada na resposta:', keyData)
           throw new Error('Chave da API do Google Maps não encontrada')
         }
 
         // Validar API key
         if (keyData.apiKey.length < 30) {
-          console.error('❌ [GoogleMap] API key suspeita (muito curta):', keyData.apiKey.length)
-          throw new Error('API key inválida - verifique a configuração no Supabase')
+          throw new Error('API key inválida - verifique a configuração')
         }
-
-        console.log('🔑 [GoogleMap] API key obtida com sucesso, carregando Google Maps...', {
-          keyLength: keyData.apiKey.length,
-          keyPrefix: keyData.apiKey.substring(0, 10) + '...'
-        })
 
         const loader = new Loader({
           apiKey: keyData.apiKey,
@@ -233,7 +197,6 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
           libraries: ['places', 'geometry'],
         })
 
-        console.log('⏳ [GoogleMap] Iniciando carregamento da biblioteca...')
         await loader.load()
         
         if (!isMounted) {
@@ -241,7 +204,6 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
           return
         }
         
-        console.log('✅ [GoogleMap] Google Maps carregado com sucesso!')
         clearTimeout(loadingTimeout)
         initializeMap()
       } catch (error) {
@@ -249,22 +211,14 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
         
         if (!isMounted) return
         
-        console.error('💥 [GoogleMap] Erro ao carregar Google Maps:', {
-          error: error instanceof Error ? error.message : error,
-          stack: error instanceof Error ? error.stack : undefined,
-          retryCount,
-          timestamp: new Date().toISOString()
-        })
-        
         if (retryCount < maxRetries) {
           retryCount++
           const retryDelay = Math.min(2000 * Math.pow(2, retryCount - 1), 10000) // Backoff exponencial
-          console.log(`🔄 [GoogleMap] Tentativa ${retryCount}/${maxRetries} em ${retryDelay}ms...`)
           setTimeout(() => {
             if (isMounted) loadGoogleMaps()
           }, retryDelay)
         } else {
-          setError(`Erro ao carregar o Google Maps: ${error instanceof Error ? error.message : 'Erro desconhecido'}`)
+          setError(`Erro ao carregar o mapa: ${error instanceof Error ? error.message : 'Erro desconhecido'}`)
           setIsLoading(false)
         }
       }
@@ -338,29 +292,9 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
 
   if (error) {
     const handleRetry = () => {
-      console.log('🔄 [GoogleMap] Tentativa manual de retry...')
       setError(null)
       setIsLoading(true)
-      // Force re-run of useEffect by creating a new user reference
       window.location.reload()
-    }
-
-    const openDiagnostic = () => {
-      // Create diagnostic component in a new window/modal
-      console.log('🔧 [GoogleMap] Abrindo diagnóstico...')
-      const diagnosticWindow = window.open('', '_blank', 'width=800,height=600')
-      if (diagnosticWindow) {
-        diagnosticWindow.document.write(`
-          <html>
-            <head><title>Diagnóstico Google Maps</title></head>
-            <body>
-              <h1>Diagnóstico do Google Maps</h1>
-              <p>Execute o diagnóstico na página principal.</p>
-              <button onclick="window.close()">Fechar</button>
-            </body>
-          </html>
-        `)
-      }
     }
 
     return (
@@ -368,38 +302,24 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
         style={{ height, width }}
         className={`rounded-lg border border-border flex items-center justify-center bg-muted ${className}`}
       >
-        <div className="text-center p-4 max-w-md">
-          <p className="text-destructive font-medium mb-2">❌ Erro ao carregar o mapa</p>
-          <p className="text-sm text-muted-foreground mb-3 bg-background p-2 rounded text-left">
+        <div className="text-center p-4">
+          <p className="text-destructive font-medium mb-2">Erro ao carregar o mapa</p>
+          <p className="text-sm text-muted-foreground mb-3">
             {error}
           </p>
-          <div className="space-y-2 text-xs text-muted-foreground">
-            <p>
-              💡 <strong>Possíveis soluções:</strong>
-            </p>
-            <ul className="text-left space-y-1">
-              <li>• Verifique se você está logado no sistema</li>
-              <li>• Certifique-se de que a API key está configurada</li>
-              <li>• Abra o DevTools (F12) para ver logs detalhados</li>
-              <li>• Verifique se as APIs estão habilitadas no Google Cloud</li>
-            </ul>
-          </div>
-          <div className="mt-4 flex gap-2 flex-wrap justify-center">
+          <div className="mt-4 flex gap-2 justify-center">
             <button 
               onClick={handleRetry}
               className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
             >
-              🔄 Tentar Novamente
+              Tentar Novamente
             </button>
             <button 
               onClick={() => window.location.reload()} 
               className="px-3 py-1 text-xs bg-secondary text-secondary-foreground rounded hover:bg-secondary/90 transition-colors"
             >
-              🔃 Recarregar Página
+              Recarregar Página
             </button>
-          </div>
-          <div className="mt-3 text-xs text-muted-foreground">
-            Problema persistente? Abra o F12 e procure por logs com [GoogleMap]
           </div>
         </div>
       </div>
@@ -414,15 +334,7 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({
       >
         <div className="text-center p-4">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-          <p className="text-muted-foreground mb-2">Carregando mapa...</p>
-          <div className="text-xs text-muted-foreground space-y-1">
-            <p>🔍 Verificando autenticação...</p>
-            <p>🔑 Obtendo chave da API...</p>
-            <p>🗺️ Carregando Google Maps...</p>
-          </div>
-          <div className="mt-3 text-xs text-muted-foreground">
-            Se demorar muito, abra o F12 para ver logs detalhados
-          </div>
+          <p className="text-muted-foreground">Carregando mapa...</p>
         </div>
       </div>
     )
