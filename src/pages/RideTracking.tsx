@@ -51,8 +51,6 @@ export default function RideTracking() {
   const [driverProfile, setDriverProfile] = useState<DriverProfile | null>(null)
   const [driverData, setDriverData] = useState<DriverData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [mapLoading, setMapLoading] = useState(true)
-  const [mapError, setMapError] = useState<string | null>(null)
 
   const loadRideData = async () => {
     if (!id) return
@@ -69,20 +67,6 @@ export default function RideTracking() {
 
       console.log('✅ Dados da corrida carregados:', rideData)
       
-      // Validate coordinates
-      if (!rideData.origin_lat || !rideData.origin_lng || !rideData.destination_lat || !rideData.destination_lng) {
-        console.error('❌ Coordenadas inválidas:', {
-          origin: { lat: rideData.origin_lat, lng: rideData.origin_lng },
-          destination: { lat: rideData.destination_lat, lng: rideData.destination_lng }
-        })
-        setMapError('Coordenadas da corrida são inválidas')
-      } else {
-        console.log('✅ Coordenadas válidas:', {
-          origin: { lat: rideData.origin_lat, lng: rideData.origin_lng },
-          destination: { lat: rideData.destination_lat, lng: rideData.destination_lng }
-        })
-        setMapError(null)
-      }
 
       setRide(rideData)
 
@@ -107,7 +91,6 @@ export default function RideTracking() {
     } catch (error) {
       console.error('❌ Erro ao carregar dados da corrida:', error)
       toast.error('Erro ao carregar corrida')
-      setMapError('Erro ao carregar dados da corrida')
     } finally {
       setLoading(false)
     }
@@ -242,12 +225,6 @@ export default function RideTracking() {
     lng: (ride.origin_lng + ride.destination_lng) / 2,
   } : { lat: -21.764, lng: -43.350 } // Default center (Juiz de Fora)
 
-  console.log('🗺️ Configuração do mapa:', {
-    hasValidCoordinates,
-    mapCenter,
-    markersCount: markers.length,
-    mapError
-  })
 
   return (
     <div className="min-h-screen bg-background">
@@ -268,168 +245,127 @@ export default function RideTracking() {
           {getStatusBadge(ride.status)}
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Map */}
-          <div className="lg:col-span-2">
-            <Card>
-              <CardContent className="p-0">
-                {mapError ? (
-                  <div className="h-[400px] flex items-center justify-center bg-muted">
+        {/* Layout Compacto - Mapa Principal (70%) */}
+        <div className="grid gap-4 lg:grid-cols-4 lg:h-[600px]">
+          {/* Mapa - Ocupa mais espaço */}
+          <div className="lg:col-span-3 h-[400px] lg:h-full">
+            <Card className="h-full">
+              <CardContent className="p-0 h-full">
+                {!hasValidCoordinates ? (
+                  <div className="h-full flex items-center justify-center bg-muted rounded-lg">
                     <div className="text-center p-6">
-                      <MapPin className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                      <h3 className="text-lg font-medium mb-2">Erro no Mapa</h3>
-                      <p className="text-sm text-muted-foreground mb-4">{mapError}</p>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => {
-                          setMapError(null)
-                          loadRideData()
-                        }}
-                      >
-                        Tentar Novamente
-                      </Button>
-                    </div>
-                  </div>
-                ) : !hasValidCoordinates ? (
-                  <div className="h-[400px] flex items-center justify-center bg-muted">
-                    <div className="text-center p-6">
-                      <MapPin className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                      <h3 className="text-lg font-medium mb-2">Coordenadas Indisponíveis</h3>
-                      <p className="text-sm text-muted-foreground">
-                        As coordenadas desta corrida não estão disponíveis.
-                      </p>
+                      <MapPin className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">Coordenadas indisponíveis</p>
                     </div>
                   </div>
                 ) : (
                   <GoogleMap
                     center={mapCenter}
-                    height="400px"
+                    height="100%"
+                    width="100%"
                     markers={markers}
-                    showRoute={hasValidCoordinates ? {
+                    showRoute={{
                       origin: { lat: ride.origin_lat, lng: ride.origin_lng },
                       destination: { lat: ride.destination_lat, lng: ride.destination_lng },
-                    } : undefined}
-                    onMapLoad={() => {
-                      console.log('✅ Mapa carregado com sucesso')
-                      setMapLoading(false)
                     }}
+                    className="rounded-lg"
                   />
-                )}
-                {mapLoading && hasValidCoordinates && !mapError && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-background/80">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-                      <p className="text-sm text-muted-foreground">Carregando mapa...</p>
-                    </div>
-                  </div>
                 )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Ride Status */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Status da Corrida</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-center p-4 bg-accent rounded-lg">
-                <p className="font-medium">{getStatusMessage(ride.status)}</p>
+          {/* Informações Laterais - Compacto (30%) */}
+          <div className="lg:col-span-1 space-y-4 lg:overflow-y-auto">
+            {/* Status & Cancelar */}
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-center mb-3">
+                  {getStatusBadge(ride.status)}
+                </div>
+                <p className="text-sm text-muted-foreground text-center mb-3">
+                  {getStatusMessage(ride.status)}
+                </p>
                 {ride.status === 'requested' && (
                   <Button 
-                    variant="outline" 
+                    variant="destructive" 
                     size="sm"
                     onClick={handleCancelRide}
-                    className="mt-3"
+                    className="w-full"
                   >
-                    Cancelar Corrida
+                    Cancelar
                   </Button>
                 )}
-              </div>
+              </CardContent>
+            </Card>
 
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <div className="w-3 h-3 bg-green-500 rounded-full mt-1.5"></div>
-                  <div>
-                    <Badge variant="secondary" className="mb-1">Origem</Badge>
-                    <p className="text-sm">{ride.origin_address}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-3 h-3 bg-red-500 rounded-full mt-1.5"></div>
-                  <div>
-                    <Badge variant="secondary" className="mb-1">Destino</Badge>
-                    <p className="text-sm">{ride.destination_address}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 pt-2">
-                <div className="text-center">
-                  <MapPin className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                  <p className="text-xs text-muted-foreground">Distância</p>
-                  <p className="font-medium">{ride.distance_km?.toFixed(1)} km</p>
-                </div>
-                <div className="text-center">
-                  <Clock className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                  <p className="text-xs text-muted-foreground">Tempo Est.</p>
-                  <p className="font-medium">{ride.estimated_duration_minutes} min</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Driver Information */}
-          {driverProfile && driverData && (
+            {/* Endereços Resumidos */}
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Motorista
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <h3 className="font-semibold">{driverProfile.full_name}</h3>
-                  <p className="text-sm text-muted-foreground">{driverProfile.phone}</p>
-                  <div className="flex items-center gap-1 mt-1">
-                    <span className="text-sm">⭐</span>
-                    <span className="text-sm font-medium">{driverData.rating.toFixed(1)}</span>
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground">De</p>
+                    <p className="text-sm font-medium truncate">{ride.origin_address}</p>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2 p-3 bg-accent rounded-lg">
-                  <Car className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="font-medium">{driverData.vehicle_brand} {driverData.vehicle_model}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {driverData.vehicle_color} • {driverData.vehicle_plate}
-                    </p>
+                <div className="flex items-start gap-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full mt-2"></div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground">Para</p>
+                    <p className="text-sm font-medium truncate">{ride.destination_address}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
-          )}
 
-          {/* Price Information */}
-          <div className="lg:col-span-2">
+            {/* Info da Corrida */}
             <Card>
-              <CardHeader>
-                <CardTitle>Informações de Pagamento</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex justify-between items-center">
-                  <span>Método de Pagamento:</span>
-                  <Badge variant="outline">
+              <CardContent className="p-4">
+                <div className="grid grid-cols-2 gap-3 text-center">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Distância</p>
+                    <p className="text-sm font-semibold">{ride.distance_km?.toFixed(1)} km</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Tempo</p>
+                    <p className="text-sm font-semibold">{ride.estimated_duration_minutes} min</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Motorista - Se disponível */}
+            {driverProfile && driverData && (
+              <Card>
+                <CardContent className="p-4">
+                  <div className="text-center mb-2">
+                    <h4 className="text-sm font-semibold">{driverProfile.full_name}</h4>
+                    <p className="text-xs text-muted-foreground">{driverProfile.phone}</p>
+                    <div className="flex items-center justify-center gap-1 mt-1">
+                      <span className="text-xs">⭐</span>
+                      <span className="text-xs">{driverData.rating.toFixed(1)}</span>
+                    </div>
+                  </div>
+                  <div className="text-center p-2 bg-accent rounded text-xs">
+                    <p className="font-medium">{driverData.vehicle_brand} {driverData.vehicle_model}</p>
+                    <p className="text-muted-foreground">{driverData.vehicle_color} • {driverData.vehicle_plate}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Pagamento */}
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground mb-1">Pagamento</p>
+                  <Badge variant="outline" className="mb-2">
                     {ride.payment_method === 'cash' ? 'Dinheiro' : 'Cartão'}
                   </Badge>
-                </div>
-                <div className="flex justify-between items-center mt-2">
-                  <span>Valor:</span>
-                  <span className="font-semibold">
+                  <p className="text-lg font-bold text-primary">
                     R$ {(ride.final_price || ride.estimated_price)?.toFixed(2)}
-                  </span>
+                  </p>
                 </div>
               </CardContent>
             </Card>
