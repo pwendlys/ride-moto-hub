@@ -152,128 +152,74 @@ const DriverOnline = () => {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-6">
-        {/* Current Location Card */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MapPin className="w-5 h-5" />
-              Sua Localização Atual
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="text-center p-4 bg-muted/50 rounded-lg">
-                <div className="text-lg font-semibold text-primary">
-                  {driverLocation.location.accuracy ? `±${driverLocation.location.accuracy.toFixed(0)}m` : 'N/A'}
-                </div>
-                <div className="text-sm text-muted-foreground">Precisão</div>
-              </div>
-              <div className="text-center p-4 bg-muted/50 rounded-lg">
-                <div className="text-lg font-semibold text-success">
-                  {driverLocation.isOnline ? 'Ativo' : 'Inativo'}
-                </div>
-                <div className="text-sm text-muted-foreground">Status</div>
-              </div>
-              <div className="text-center p-4 bg-muted/50 rounded-lg">
-                <div className="text-lg font-semibold text-primary">
-                  {rideQueue.activeNotifications.length}
-                </div>
-                <div className="text-sm text-muted-foreground">Corridas Pendentes</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Connection Status */}
-        <RideQueueStatus />
-
-        {/* Map */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Navigation className="w-5 h-5" />
-              Mapa de Localização
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {currentLocation.coords && (
-              <GoogleMap
-                center={currentLocation.coords}
-                zoom={16}
-                height="400px"
-                className="w-full rounded-b-lg"
-                markers={[
-                  {
-                    position: currentLocation.coords,
-                    title: 'Sua localização',
-                    icon: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-                      <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="20" cy="20" r="15" fill="#22c55e" stroke="#fff" stroke-width="3"/>
-                        <circle cx="20" cy="20" r="5" fill="#fff"/>
-                      </svg>
-                    `)
-                  }
-                ]}
-                onMapLoad={(mapInstance) => {
-                  setMap(mapInstance);
-                  setMapLoaded(true);
-                }}
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Available Rides Section */}
-        <div className="space-y-4">
+      <div className="container mx-auto px-4 py-6 space-y-4">
+        {/* Compact Status Bar */}
+        <Card className="p-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Corridas Disponíveis</h2>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefreshRides}
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Atualizar
-              </Button>
+            <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                {rideQueue.isListening ? (
-                  <Bell className="w-5 h-5 text-success" />
-                ) : (
-                  <BellOff className="w-5 h-5 text-muted-foreground" />
-                )}
-                <span className="text-sm text-muted-foreground">
-                  {rideQueue.isListening ? 'Conectado' : 'Desconectado'}
+                <div className={`w-3 h-3 rounded-full ${driverLocation.isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
+                <span className="font-medium">
+                  {driverLocation.isOnline ? 'Online' : 'Offline'}
                 </span>
               </div>
+              <Badge variant="outline">
+                {rideQueue.activeNotifications.length} corridas
+              </Badge>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {rideQueue.isListening ? (
+                  <Bell className="w-4 h-4 text-green-500" />
+                ) : (
+                  <BellOff className="w-4 h-4 text-red-500" />
+                )}
+                {rideQueue.isListening ? 'Conectado' : 'Desconectado'}
+              </div>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefreshRides}
+            >
+              <RefreshCw className="w-4 h-4" />
+            </Button>
           </div>
+        </Card>
 
-          <MinimalRidesList
-            notifications={rideQueue.activeNotifications}
-            onAccept={handleAcceptRide}
-            onDecline={handleDeclineRide}
-            isListening={rideQueue.isListening}
-          />
-
-          {process.env.NODE_ENV === 'development' && (
-            <Card className="border-dashed">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Debug Info</CardTitle>
-              </CardHeader>
-              <CardContent className="text-xs space-y-1">
-                <div>🔔 Listener: {rideQueue.isListening ? '✅ Ativo' : '❌ Inativo'}</div>
-                <div>👤 User ID: {user?.id}</div>
-                <div>🌐 Online: {driverLocation.isOnline ? '✅' : '❌'}</div>
-                <div>📍 Coords: {currentLocation.coords ? `${currentLocation.coords.lat.toFixed(6)}, ${currentLocation.coords.lng.toFixed(6)}` : 'N/A'}</div>
-                <div>📨 Notifications: {rideQueue.activeNotifications.length}</div>
-                <div>⏰ Timestamp: {new Date().toLocaleTimeString()}</div>
-              </CardContent>
-            </Card>
+        {/* Compact Map */}
+        <div className="relative h-80 bg-muted rounded-lg overflow-hidden">
+          {currentLocation.coords && (
+            <GoogleMap
+              center={currentLocation.coords}
+              zoom={16}
+              height="100%"
+              className="w-full h-full"
+              markers={[
+                {
+                  position: currentLocation.coords,
+                  title: 'Sua localização',
+                  icon: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                    <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="20" cy="20" r="15" fill="#22c55e" stroke="#fff" stroke-width="3"/>
+                      <circle cx="20" cy="20" r="5" fill="#fff"/>
+                    </svg>
+                  `)
+                }
+              ]}
+              onMapLoad={(mapInstance) => {
+                setMap(mapInstance);
+                setMapLoaded(true);
+              }}
+            />
           )}
         </div>
+
+        {/* Ride Notifications */}
+        <MinimalRidesList
+          notifications={rideQueue.activeNotifications}
+          onAccept={handleAcceptRide}
+          onDecline={handleDeclineRide}
+          isListening={rideQueue.isListening}
+        />
       </div>
     </div>
   );
